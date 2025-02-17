@@ -10,7 +10,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 
 - Backup configuration files to iCloud Drive or a specified folder.
 - Restore configurations seamlessly to their original locations.
-- Install as a CRON job that runs at every system reboot.
+- Install a CRON job that runs at every system reboot.
 - Remove the installed CRON job when no longer needed.
 
 ## Usage
@@ -32,8 +32,10 @@ Backups: iCloud Drive/SettingsSentry
 #### Options
 
 -config=`<path>`: Path to the configuration folder (default: ./configs).
+
 -backup=`<path>`: Path to the backup folder (default: iCloud Drive/SettingsSentry).
--app=`<name>`: Optional name of the application to process.
+
+-app=`<name>`: Optional application name to process.
 
 ## License
 
