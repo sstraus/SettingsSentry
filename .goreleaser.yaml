@@ -1,0 +1,35 @@
+version: 2
+project_name: "SettingsSentry"
+
+release:
+  github:
+    owner: sstraus
+    name: SettingsSentry
+
+builds:
+  - id: settingssentry
+    main: .
+    binary: settingssentry
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+dist: dist
+
+archives:
+  - format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - "{{ .Binary }}"
+      
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: "desc"
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
