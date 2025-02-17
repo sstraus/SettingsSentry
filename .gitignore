@@ -1,0 +1,4 @@
+SettingsSentry_v1.0.zip
+.env
+.DS_Store
+goreleaser.yaml
