@@ -5,3 +5,7 @@ goreleaser.yaml
 .goreleaser.yaml
 dist/
 test.yaml
+settingssentry
+SettingsSentry.zip
+.goreleaser.yaml
+.gitignore

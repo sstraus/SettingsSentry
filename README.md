@@ -33,7 +33,7 @@ Backups: iCloud Drive/SettingsSentry
 
 -config=`<path>`: Path to the configuration folder (default: ./configs).
 
--backup=`<path>`: Path to the backup folder (default: iCloud Drive/SettingsSentry).
+-backup=`<path>`: Path to the backup folder (default: iCloud Drive/.settingssentry_backups).
 
 -app=`<name>`: Optional application name to process.
 
