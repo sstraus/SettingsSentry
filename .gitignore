@@ -9,3 +9,4 @@ settingssentry
 SettingsSentry.zip
 .goreleaser.yaml
 .gitignore
+.vscode/settings.json

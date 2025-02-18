@@ -7,12 +7,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/robfig/cron"
 )
 
 var comment = "# SettingsSentry cron job"
 
 // AddCronJob adds a new cron job for the current executable
-func AddCronJob() error {
+func AddCronJob(schedule *string) error {
 	// Get the current executable path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -25,8 +27,16 @@ func AddCronJob() error {
 
 	// Define the cron job with the current executable
 	//job := fmt.Sprintf("0 9 * * * %s %s", execPath, comment)
-	job := fmt.Sprintf("@reboot %s %s", execPath, comment)
-
+	var job string
+	if schedule == nil {
+		job = fmt.Sprintf("@reboot %s %s", execPath, comment)
+	} else {
+		_, err = cron.ParseStandard(*schedule)
+		if err != nil {
+			return fmt.Errorf("invalid cron job schedule: %w", err)
+		}
+		job = fmt.Sprintf("%s %s %s", *schedule, execPath, comment)
+	}
 	// Get the existing crontab
 	cmd := exec.Command("crontab", "-l")
 	var out bytes.Buffer

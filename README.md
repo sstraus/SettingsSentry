@@ -22,6 +22,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - backup: Backup configuration files to the specified backup folder.
 - restore: Restore the files to their original locations.
 - install: Install the application as a CRON job that runs at every reboot.
+    You can also provide a valid cron expression as a parameter to customize the schedule (0 9 * * *). Use [cronhub](https://crontab.cronhub.io) to generate a valid one.
 - remove: Remove the previously installed CRON job.
 
 ### Default Values
