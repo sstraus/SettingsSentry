@@ -14,6 +14,41 @@ import (
 	"strings"
 )
 
+var (
+	Version = "1.1.2"
+)
+
+type Printer struct {
+	printAppName string
+	firstPrint   bool
+}
+
+// Updated NewPrinter to accept an initial app name
+func NewPrinter(appName string) *Printer {
+	return &Printer{
+		printAppName: "\n\033[1m" + appName + "\033[0m -> ", // Set the initial app name
+		firstPrint:   true,
+	}
+}
+
+func (p *Printer) Print(format string, args ...interface{}) {
+	if p.firstPrint {
+		// Prepend printAppName for the first print
+		fmt.Printf("%s "+format, append([]interface{}{p.printAppName}, args...)...)
+		p.firstPrint = false // Reset the state after printing for the first time
+	} else {
+		// Normal print for subsequent calls
+		fmt.Printf(format, args...)
+	}
+}
+
+func (p *Printer) Reset() {
+	p.firstPrint = true
+}
+
+// Global printer variable
+var printer *Printer
+
 type Config struct {
 	AppName         string
 	ConfigFiles     []string
@@ -137,7 +172,7 @@ func copyDirectory(src, dst string) error {
 }
 
 // processConfiguration processes configuration files for backup or restore.
-func processConfiguration(configFolder, backupFolder, appName string, isBackup bool) {
+func processConfiguration(configFolder, backupFolder, appName string, isBackup bool, noCommands bool) {
 	files, err := os.ReadDir(configFolder)
 	if err != nil {
 		fmt.Printf("Error reading config folder: %v\n", err)
@@ -167,7 +202,9 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 			continue
 		}
 
-		if isBackup {
+		printer = NewPrinter(config.AppName)
+
+		if isBackup && !noCommands {
 			for _, backupCommand := range config.BackupCommands {
 				// Split the command into command and its arguments
 				executeCommandLine(backupCommand)
@@ -184,52 +221,52 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 					//fmt.Printf("Skipping non-existent path: %s\n", srcPath)
 					continue
 				} else if err != nil {
-					fmt.Printf("Error accessing %s: %v\n", srcPath, err)
+					printer.Print("Error accessing %s: %v\n", srcPath, err)
 					continue
 				}
 
 				if info.IsDir() {
 					err = copyDirectory(srcPath, dstPath)
 					if err != nil {
-						fmt.Printf("Error backing up directory %s: %v\n", srcPath, err)
+						printer.Print("Error backing up directory %s: %v\n", srcPath, err)
 					} else {
-						fmt.Printf("Backed up directory %s to %s\n", srcPath, dstPath)
+						printer.Print("Backed up directory %s to %s\n", srcPath, dstPath)
 					}
 				} else {
 					err = copyFile(srcPath, dstPath)
 					if err != nil {
-						fmt.Printf("Error backing up file %s: %v\n", srcPath, err)
+						printer.Print("Error backing up file %s: %v\n", srcPath, err)
 					} else {
-						fmt.Printf("Backed up file %s to %s\n", srcPath, dstPath)
+						printer.Print("Backed up file %s to %s\n", srcPath, dstPath)
 					}
 				}
 			} else { // Restore
 				info, err := os.Stat(dstPath)
 				if os.IsNotExist(err) {
-					fmt.Printf("Skipping non-existent backup: %s\n", dstPath)
+					printer.Print("Skipping non-existent backup: %s\n", dstPath)
 					continue
 				} else if err != nil {
-					fmt.Printf("Error accessing %s: %v\n", dstPath, err)
+					printer.Print("Error accessing %s: %v\n", dstPath, err)
 					continue
 				}
 
 				if info.IsDir() {
 					err = copyDirectory(dstPath, srcPath)
 					if err != nil {
-						fmt.Printf("Error restoring directory %s: %v\n", dstPath, err)
+						printer.Print("Error restoring directory %s: %v\n", dstPath, err)
 					} else {
-						fmt.Printf("Restored directory %s to %s\n", dstPath, srcPath)
+						printer.Print("Restored directory %s to %s\n", dstPath, srcPath)
 					}
 				} else {
 					err = copyFile(dstPath, srcPath)
 					if err != nil {
-						fmt.Printf("Error restoring file %s: %v\n", dstPath, err)
+						printer.Print("Error restoring file %s: %v\n", dstPath, err)
 					} else {
 						fmt.Printf("Restored file %s to %s\n", dstPath, srcPath)
 					}
 				}
 			}
-			if !isBackup {
+			if !isBackup && !noCommands {
 				for _, restoreCommand := range config.RestoreCommands {
 					executeCommandLine(restoreCommand)
 				}
@@ -242,7 +279,7 @@ func executeCommandLine(commandLine string) bool {
 	parts := strings.Fields(commandLine)
 
 	if len(parts) == 0 {
-		fmt.Println("No command provided")
+		printer.Print("No command provided")
 		return true
 	}
 
@@ -253,31 +290,18 @@ func executeCommandLine(commandLine string) bool {
 	// Define the command with its arguments
 	cmd := exec.Command(cmdName, cmdArgs...) // Use cmdArgs with "..."
 
-	// Redirect stdout and stderr to the current process's stdout and stderr
+	// Set the Stdout and Stderr to os.Stdout and os.Stderr respectively
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("Error starting command %s: %s\n", commandLine, err)
-		return false
-	}
-
-	// Wait for the command to finish and capture any error
-	if err := cmd.Wait(); err != nil {
-		fmt.Printf("Error executing command %s: %s\n", commandLine, err)
-		return false
-	}
-
-	// Get the output of the command
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Printf("Error executing %s: %s\n", commandLine, err)
+	// Start the command and wait for it to finish
+	if err := cmd.Run(); err != nil {
+		printer.Print("Error executing command %s: %s\n", commandLine, err)
 		return false
 	}
 
 	// Print the output
-	fmt.Printf("Command %s executed:\n%s\n", commandLine, output)
+	printer.Print("Command %s executed\n", commandLine)
 
 	return true
 }
@@ -295,11 +319,12 @@ func main() {
 	configFolder := flag.String("config", "./configs", "Path to the configuration folder")
 	backupFolder := flag.String("backup", icloud_path, "Path to the backup folder")
 	appName := flag.String("app", "", "Optional: Name of the application to process")
-	fmt.Println("SettingsSentry v1.1.1")
+	noCommands := flag.Bool("nocommands", false, "Optional: Prevent pre-backup/restore commands execution")
+	fmt.Println("\033[1mSettingsSentry v" + Version + "\033[0m")
 	if len(os.Args) < 2 {
 		fmt.Println("Securely archive and reinstate your macOS application configurations, simplifying system recovery processes.")
 		fmt.Println("")
-		fmt.Println("Usage: main <action> [-config=<path>] [-backup=<path>] [-app=<name>]")
+		fmt.Println("Usage: main <action> [-config=<path>] [-backup=<path>] [-app=<name>] [-nocommands]")
 		fmt.Println("")
 		fmt.Println("Actions:")
 		fmt.Println("  backup   - Backup configuration files to the specified backup folder")
@@ -310,6 +335,8 @@ func main() {
 		fmt.Println("Default values:")
 		fmt.Println("  Configurations: ./configs")
 		fmt.Printf("  Backups: iCloud Drive/%s\n", constants.DEFAULT_BACKUP_PATH)
+		fmt.Println("")
+		fmt.Println("Documentation available at https://github.com/sstraus/SettingsSentry")
 
 		installed, err := cronjob.IsCronJobInstalled()
 		if err != nil {
@@ -329,9 +356,9 @@ func main() {
 	action := os.Args[1]
 	switch action {
 	case "backup":
-		processConfiguration(*configFolder, *backupFolder, *appName, true)
+		processConfiguration(*configFolder, *backupFolder, *appName, true, *noCommands)
 	case "restore":
-		processConfiguration(*configFolder, *backupFolder, *appName, false)
+		processConfiguration(*configFolder, *backupFolder, *appName, false, *noCommands)
 	case "install":
 		when := ""
 		if len(os.Args) > 2 {

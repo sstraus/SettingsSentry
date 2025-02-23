@@ -15,7 +15,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 
 ## Usage
 
-./SettingsSentry `<action>` [-config=`<path>`] [-backup=`<path>`] [-app=`<name>`]
+./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<name>`] [-nocommands]
 
 ### Actions
 
@@ -32,11 +32,39 @@ Backups: iCloud Drive/SettingsSentry
 
 #### Options
 
--config=`<path>`: Path to the configuration folder (default: ./configs).
+- `--config` `<path>`: Path to the configuration folder (default: `./configs`).
 
--backup=`<path>`: Path to the backup folder (default: iCloud Drive/.settingssentry_backups).
+- `--backup` `<path>`: Path to the backup folder (default: `iCloud Drive/.settingssentry_backups`).
 
--app=`<name>`: Optional application name to process.
+- `--app` `<name>`: Optional name of the application to process.
+
+- `-nocommands`: Prevent command execution during backup or restore.
+
+### Configuration Files
+
+All configuration files are stored in the `./configs` folder. Below is an example of a configuration file named `{name}.cfg`:
+
+```ini
+
+[application]
+\# Name of the application to backup
+name = Brew
+
+[backup_commands] # this directive is optional
+\# Command to execute for backing up installed packages
+brew bundle dump --force --file=~/.Brewfile
+
+[restore_commands]
+\# Command to execute for restoring packages from backup
+brew bundle install --file=~/.Brewfile
+
+[configuration_files]
+\# List of configuration files to copy (supports files and folders)
+.Brewfile
+
+```
+
+This configuration file specifies the application name, backup and restore commands, as well as the necessary configuration files.
 
 ## License
 
