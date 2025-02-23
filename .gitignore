@@ -10,3 +10,5 @@ SettingsSentry.zip
 .goreleaser.yaml
 .gitignore
 .vscode/settings.json
+build.sh
+todo.txt

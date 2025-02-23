@@ -232,7 +232,7 @@ func main() {
 	configFolder := flag.String("config", "./configs", "Path to the configuration folder")
 	backupFolder := flag.String("backup", icloud_path, "Path to the backup folder")
 	appName := flag.String("app", "", "Optional: Name of the application to process")
-	fmt.Println("SettingsSentry v1.1")
+	fmt.Println("SettingsSentry v1.1.1")
 	if len(os.Args) < 2 {
 		fmt.Println("Securely archive and reinstate your macOS application configurations, simplifying system recovery processes.")
 		fmt.Println("")
@@ -270,8 +270,15 @@ func main() {
 	case "restore":
 		processConfiguration(*configFolder, *backupFolder, *appName, false)
 	case "install":
-		when := &os.Args[2]
-		err := cronjob.AddCronJob(when)
+		when := ""
+		if len(os.Args) > 2 {
+			when = os.Args[2] // get the argument if provided
+		} else {
+			when = "0 0 * * *" // Example default cron expression (runs daily at midnight)
+		}
+
+		// Pass when as a pointer
+		err := cronjob.AddCronJob(&when)
 		if err != nil {
 			fmt.Printf("Error while installing CRON job: %v\n", err)
 		}
