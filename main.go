@@ -9,13 +9,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
 type Config struct {
-	AppName     string
-	ConfigFiles []string
+	AppName         string
+	ConfigFiles     []string
+	BackupCommands  []string
+	RestoreCommands []string
 }
 
 // getHomeDirectory returns the user's home directory.
@@ -75,6 +78,10 @@ func parseConfig(filePath string) (Config, error) {
 			config.AppName = strings.TrimSpace(strings.SplitN(line, "=", 2)[1])
 		} else if section == "configuration_files" {
 			config.ConfigFiles = append(config.ConfigFiles, line)
+		} else if section == "backup_commands" {
+			config.BackupCommands = append(config.BackupCommands, line)
+		} else if section == "restore_commands" {
+			config.RestoreCommands = append(config.RestoreCommands, line)
 		}
 	}
 
@@ -160,6 +167,13 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 			continue
 		}
 
+		if isBackup {
+			for _, backupCommand := range config.BackupCommands {
+				// Split the command into command and its arguments
+				executeCommandLine(backupCommand)
+			}
+		}
+
 		for _, configFile := range config.ConfigFiles {
 			srcPath := filepath.Join(homeDir, configFile)
 			dstPath := filepath.Join(backupFolder, config.AppName, filepath.Base(configFile))
@@ -215,8 +229,57 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 					}
 				}
 			}
+			if !isBackup {
+				for _, restoreCommand := range config.RestoreCommands {
+					executeCommandLine(restoreCommand)
+				}
+			}
 		}
 	}
+}
+
+func executeCommandLine(commandLine string) bool {
+	parts := strings.Fields(commandLine)
+
+	if len(parts) == 0 {
+		fmt.Println("No command provided")
+		return true
+	}
+
+	// The first part is the command, and the rest are arguments
+	cmdName := parts[0]
+	cmdArgs := parts[1:]
+
+	// Define the command with its arguments
+	cmd := exec.Command(cmdName, cmdArgs...) // Use cmdArgs with "..."
+
+	// Redirect stdout and stderr to the current process's stdout and stderr
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("Error starting command %s: %s\n", commandLine, err)
+		return false
+	}
+
+	// Wait for the command to finish and capture any error
+	if err := cmd.Wait(); err != nil {
+		fmt.Printf("Error executing command %s: %s\n", commandLine, err)
+		return false
+	}
+
+	// Get the output of the command
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Error executing %s: %s\n", commandLine, err)
+		return false
+	}
+
+	// Print the output
+	fmt.Printf("Command %s executed:\n%s\n", commandLine, output)
+
+	return true
 }
 
 func main() {
