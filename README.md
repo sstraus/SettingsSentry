@@ -47,19 +47,19 @@ All configuration files are stored in the `./configs` folder. Below is an exampl
 ```ini
 
 [application]
-\# Name of the application to backup
+# Name of the application to backup
 name = Brew
 
-[backup_commands] # this directive is optional
-\# Command to execute for backing up installed packages
+[backup_commands] # This directive is optional
+# Command to execute for backing up installed packages
 brew bundle dump --force --file=~/.Brewfile
 
 [restore_commands]
-\# Command to execute for restoring packages from backup
+# Command to execute for restoring packages from the backup
 brew bundle install --file=~/.Brewfile
 
 [configuration_files]
-\# List of configuration files to copy (supports files and folders)
+# List of configuration files to copy (supports files and folders)
 .Brewfile
 
 ```
