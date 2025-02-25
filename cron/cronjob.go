@@ -14,7 +14,7 @@ import (
 var comment = "# SettingsSentry cron job"
 
 // AddCronJob adds a new cron job for the current executable
-func AddCronJob(schedule *string) error {
+func AddCronJob(schedule *string, params string) error {
 	// Get the current executable path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -28,15 +28,13 @@ func AddCronJob(schedule *string) error {
 	// Define the cron job with the current executable
 	//job := fmt.Sprintf("0 9 * * * %s %s", execPath, comment)
 	var job string
-	if schedule == nil {
-		job = fmt.Sprintf("@reboot %s %s", execPath, comment)
-	} else {
+	if schedule != nil && *schedule != "@reboot" {
 		_, err = cron.ParseStandard(*schedule)
 		if err != nil {
 			return fmt.Errorf("invalid cron job schedule: %w", err)
 		}
-		job = fmt.Sprintf("%s %s %s", *schedule, execPath, comment)
 	}
+	job = fmt.Sprintf("%s %s backup %s %s", *schedule, execPath, params, comment)
 	// Get the existing crontab
 	cmd := exec.Command("crontab", "-l")
 	var out bytes.Buffer

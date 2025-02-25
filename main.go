@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	Version = "1.1.2"
+	Version = "1.1.3"
 )
 
 type Printer struct {
@@ -364,11 +364,17 @@ func main() {
 		if len(os.Args) > 2 {
 			when = os.Args[2] // get the argument if provided
 		} else {
-			when = "0 0 * * *" // Example default cron expression (runs daily at midnight)
+			when = "@reboot" // Example default cron expression (runs daily at midnight)
 		}
 
+		var commandOption string
+		if *noCommands {
+			commandOption = "-nocommands"
+		} else {
+			commandOption = ""
+		}
 		// Pass when as a pointer
-		err := cronjob.AddCronJob(&when)
+		err := cronjob.AddCronJob(&when, commandOption)
 		if err != nil {
 			fmt.Printf("Error while installing CRON job: %v\n", err)
 		}

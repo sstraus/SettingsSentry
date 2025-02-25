@@ -17,7 +17,7 @@
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/main.go",
-            "args": ["backup"]
+            "args": ["install"]
         },
         {
             "name": "Launch Package",
