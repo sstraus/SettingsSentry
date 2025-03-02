@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	Version = "1.1.3"
+	Version = "1.1.4"
 )
 
 type Printer struct {
@@ -173,6 +173,15 @@ func copyDirectory(src, dst string) error {
 
 // processConfiguration processes configuration files for backup or restore.
 func processConfiguration(configFolder, backupFolder, appName string, isBackup bool, noCommands bool) {
+	// Check if configFolder does not contain "/"
+	if !strings.Contains(configFolder, string(os.PathSeparator)) {
+		exePath, err := os.Executable() // Get the path of the executable
+		if err != nil {
+			fmt.Println("Error getting executable path:", err)
+			return
+		}
+		configFolder = filepath.Join(filepath.Dir(exePath), configFolder) // Append to the executable directory
+	}
 	files, err := os.ReadDir(configFolder)
 	if err != nil {
 		fmt.Printf("Error reading config folder: %v\n", err)
@@ -316,7 +325,7 @@ func main() {
 	icloud_path = filepath.Join(icloud_path, constants.DEFAULT_BACKUP_PATH)
 
 	// Define shared command-line flags
-	configFolder := flag.String("config", "./configs", "Path to the configuration folder")
+	configFolder := flag.String("config", "configs", "Path to the configuration folder")
 	backupFolder := flag.String("backup", icloud_path, "Path to the backup folder")
 	appName := flag.String("app", "", "Optional: Name of the application to process")
 	noCommands := flag.Bool("nocommands", false, "Optional: Prevent pre-backup/restore commands execution")
@@ -333,7 +342,7 @@ func main() {
 		fmt.Println("  remove   - Remove the previously installed CRON job")
 		fmt.Println("")
 		fmt.Println("Default values:")
-		fmt.Println("  Configurations: ./configs")
+		fmt.Println("  Configurations: configs")
 		fmt.Printf("  Backups: iCloud Drive/%s\n", constants.DEFAULT_BACKUP_PATH)
 		fmt.Println("")
 		fmt.Println("Documentation available at https://github.com/sstraus/SettingsSentry")

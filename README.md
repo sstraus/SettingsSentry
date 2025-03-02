@@ -27,12 +27,12 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 
 ### Default Values
 
-Configurations: ./configs
+Configurations: configs
 Backups: iCloud Drive/SettingsSentry
 
 #### Options
 
-- `--config` `<path>`: Path to the configuration folder (default: `./configs`).
+- `--config` `<path>`: Path to the configuration folder (default: `configs`).
 
 - `--backup` `<path>`: Path to the backup folder (default: `iCloud Drive/.settingssentry_backups`).
 
@@ -42,7 +42,7 @@ Backups: iCloud Drive/SettingsSentry
 
 ### Configuration Files
 
-All configuration files are stored in the `./configs` folder. Below is an example of a configuration file named `{name}.cfg`:
+All configuration files are stored in the `configs` folder. Below is an example of a configuration file named `{name}.cfg`:
 
 ```ini
 
