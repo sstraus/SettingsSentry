@@ -12,3 +12,4 @@ SettingsSentry.zip
 .vscode/settings.json
 build.sh
 todo.txt
+tools/config_updater/
