@@ -14,18 +14,42 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.24'
           check-latest: true
 
+<<<<<<< HEAD
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v4
+=======
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build macOS binary
+        run: |
+          go build -o SettingsSentry
+          chmod +x SettingsSentry
+          
+      - name: Create DMG
+        run: |
+          mkdir -p ./SettingsSentry.app/Contents/MacOS
+          cp SettingsSentry ./SettingsSentry.app/Contents/MacOS/
+          hdiutil create -volname "SettingsSentry" -srcfolder ./SettingsSentry.app -ov -format UDZO SettingsSentry.dmg
+
+      - name: Create ZIP with configs
+        run: |
+          zip -r SettingsSentry.zip SettingsSentry configs
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+>>>>>>> 842d95f442f22f3641043e6ccf3b81bb3da85932
         with:
           distribution: goreleaser
           version: latest
