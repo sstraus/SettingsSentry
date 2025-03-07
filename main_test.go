@@ -179,9 +179,43 @@ func TestCopyDirectory(t *testing.T) {
 func TestExecuteCommandLine(t *testing.T) {
 	// Initialize the global printer before calling executeCommandLine
 	printer = NewPrinter("TestApp")
-	
+
 	result := executeCommandLine("echo test")
 	if !result {
 		t.Errorf("executeCommandLine() returned false for a simple echo command")
 	}
+}
+
+func TestGetXDGConfigHome(t *testing.T) {
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", "/test/home")
+	defer os.Setenv("HOME", originalHome)
+
+	// Test case 1: XDG_CONFIG_HOME is set within home directory
+	os.Setenv("XDG_CONFIG_HOME", "/test/home/xdg")
+	xdgDir, err := getXDGConfigHome()
+	if err != nil {
+		t.Errorf("getXDGConfigHome() error = %v, want nil", err)
+	}
+	if xdgDir != "/test/home/xdg" {
+		t.Errorf("getXDGConfigHome() got = %v, want /test/home/xdg", xdgDir)
+	}
+	os.Unsetenv("XDG_CONFIG_HOME")
+
+	// Test case 2: XDG_CONFIG_HOME is not set
+	xdgDir, err = getXDGConfigHome()
+	if err != nil {
+		t.Errorf("getXDGConfigHome() error = %v, want nil", err)
+	}
+	if xdgDir != "/test/home/.config" {
+		t.Errorf("getXDGConfigHome() got = %v, want /test/home/.config", xdgDir)
+	}
+
+	// Test case 3: XDG_CONFIG_HOME is outside the home directory
+	os.Setenv("XDG_CONFIG_HOME", "/outside/xdg")
+	_, err = getXDGConfigHome()
+	if err == nil {
+		t.Errorf("getXDGConfigHome() error = %v, want error", err)
+	}
+	os.Unsetenv("XDG_CONFIG_HOME")
 }

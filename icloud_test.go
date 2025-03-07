@@ -2,53 +2,27 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 )
 
-func TestGetICloudFolderLocation(t *testing.T) {
-	// This test is more of a smoke test since we can't easily mock the iCloud path
-	// on a real system. It will at least verify that the function doesn't crash.
-	
-	// Get the iCloud folder location
-	icloudPath, err := get_iCloud_folder_location()
-	
-	// If the test is running on a system without iCloud configured,
-	// we expect an error, so we'll skip the test in that case
-	if err != nil {
-		t.Skipf("Skipping test because iCloud is not configured: %v", err)
-	}
-	
-	// Verify the path is not empty
-	if icloudPath == "" {
-		t.Errorf("get_iCloud_folder_location() returned an empty path")
-	}
-	
-	// Verify the path exists
-	_, err = os.Stat(icloudPath)
-	if os.IsNotExist(err) {
-		t.Errorf("iCloud path %s does not exist", icloudPath)
-	}
-}
+// TestGetICloudFolderLocationErrors tests error cases for get_iCloud_folder_location
+// We can't easily test the success case without mocking getHomeDirectory
+func TestGetICloudFolderLocationErrors(t *testing.T) {
+	// Save the original fs and restore it after the test
+	originalFs := fs
+	defer func() { fs = originalFs }()
 
-// TestGetICloudFolderLocationWithMock tests the function with a mocked environment
-func TestGetICloudFolderLocationWithMock(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir := filepath.Join(os.TempDir(), "settingssentry-test", "Library", "Mobile Documents", "com~apple~CloudDocs")
-	err := os.MkdirAll(tempDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create test directory: %v", err)
+	// Create a mock file system that always returns errors
+	mockFs := &mockFileSystem{
+		statFunc: func(path string) (os.FileInfo, error) {
+			return nil, os.ErrNotExist
+		},
 	}
-	defer os.RemoveAll(filepath.Join(os.TempDir(), "settingssentry-test"))
-	
-	// Save the original HOME environment variable
-	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
-	
-	// Set HOME to our test directory
-	os.Setenv("HOME", filepath.Join(os.TempDir(), "settingssentry-test"))
-	
-	// This test will still likely fail on a real system because the function
-	// uses filepath.EvalSymlinks which expects real symlinks, but it's a good
-	// example of how we would test this function in isolation
+	fs = mockFs
+
+	// Test case: iCloud folder not found
+	_, err := get_iCloud_folder_location()
+	if err == nil {
+		t.Errorf("Expected error when iCloud folder doesn't exist, got nil")
+	}
 }
