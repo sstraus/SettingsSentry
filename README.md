@@ -17,7 +17,6 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - Versioned backups with timestamp-based directories.
 - Dry-run mode to preview operations without making changes.
 
-
 ## Usage
 
 ./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<n>`] [-nocommands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`]
@@ -27,7 +26,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - backup: Backup configuration files to the specified backup folder.
 - restore: Restore the files to their original locations.
 - install: Install the application as a CRON job that runs at every reboot.
-    You can also provide a valid cron expression as a parameter to customize the schedule (0 9 * * *). Use [cronhub](https://crontab.cronhub.io) to generate a valid one.
+    You can also provide a valid cron expression as a parameter to customize the schedule (0 9 \* \* \*). Use [cronhub](https://crontab.cronhub.io) to generate a valid one.
 - remove: Remove the previously installed CRON job.
 
 ### Default Values
@@ -102,7 +101,6 @@ ${CONFIG_DIR}/.config
 
 Environment variables will be expanded when the configuration is loaded, making it easy to reuse the same configuration across different environments or users.
 
-
 ### Versioned Backups
 
 SettingsSentry creates versioned backups using timestamp-based directories (format: YYYYMMDD-HHMMSS). This allows you to:
@@ -123,10 +121,9 @@ The dry-run mode allows you to preview what would happen during backup or restor
 
 To use dry-run mode, add the `--dry-run` flag to your command:
 
-```
+```sh
 ./SettingsSentry backup --dry-run
 ```
-
 
 ## License
 

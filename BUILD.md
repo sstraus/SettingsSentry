@@ -1,6 +1,6 @@
-## Development
+# Development
 
-### Dependency Management
+## Dependency Management
 
 SettingsSentry uses Go modules for dependency management. The project dependencies are defined in the `go.mod` file and are vendored for reproducible builds.
 
@@ -17,24 +17,6 @@ To build using vendored dependencies:
 ```bash
 go build -mod=vendor
 ```
-
-### CI/CD Pipeline
-
-SettingsSentry uses GitHub Actions for continuous integration and deployment, specifically designed for macOS:
-
-- **CI Workflow**: Runs on every push to main and pull requests. It includes:
-  - Linting with golangci-lint
-  - Running tests with race detection
-  - Building the application
-
-- **Release Workflow**: Triggered when a new tag is pushed. It:
-  - Runs tests
-  - Builds macOS binaries for both Intel and Apple Silicon
-  - Creates a macOS DMG installer
-  - Creates a ZIP archive with the executable and configuration files
-  - Publishes GitHub releases with assets
-
-- **Security Scanning**: CodeQL analysis for security vulnerabilities
 
 ### Local Development
 
@@ -57,7 +39,7 @@ make clean
 make release
 ```
 
-# Building SettingsSentry
+## Building SettingsSentry
 
 This document provides instructions for building, testing, and developing SettingsSentry.
 
@@ -70,11 +52,13 @@ This document provides instructions for building, testing, and developing Settin
 ## Setup Development Environment
 
 1. Install Go:
+
    ```bash
    brew install go
    ```
 
 2. Install development tools:
+
    ```bash
    brew install golangci-lint goreleaser
    ```
@@ -186,11 +170,22 @@ Or manually:
 golangci-lint run
 ```
 
-## CI/CD Pipeline
+### CI/CD Pipeline
 
-SettingsSentry uses GitHub Actions for continuous integration and deployment. The pipeline is specifically designed for macOS:
+SettingsSentry uses GitHub Actions for continuous integration and deployment, specifically designed for macOS:
 
-- **CI Workflow**: Runs on every push to main and pull requests. It includes linting, testing, and building.
-- **Release Workflow**: Triggered when a new tag is pushed. It builds macOS binaries and creates release assets.
+- **CI Workflow**: Runs on every push to main and pull requests. It includes:
+  - Linting with golangci-lint
+  - Running tests with race detection
+  - Building the application
+
+- **Release Workflow**: Triggered when a new tag is pushed. It:
+  - Runs tests
+  - Builds macOS binaries for both Intel and Apple Silicon
+  - Creates a macOS DMG installer
+  - Creates a ZIP archive with the executable and configuration files
+  - Publishes GitHub releases with assets
+
+- **Security Scanning**: CodeQL analysis for security vulnerabilities
 
 See the `.github/workflows` directory for the workflow definitions.
