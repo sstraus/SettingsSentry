@@ -1,3 +1,5 @@
+version: 2
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 project_name: SettingsSentry
 
 before:
@@ -13,25 +15,21 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.Version={{.Version}}
-    binary: SettingsSentry
+      - -s -w -X main.version={{.Version}}
+    binary: settingssentry
 
 archives:
   - format: zip
-    name_template: >-
+    name_template: |-
       {{ .ProjectName }}_
-      {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
     files:
-      - configs/**/*
-
+      - configs/**
 checksum:
   name_template: 'checksums.txt'
 
-snapshot:
-  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -42,17 +40,3 @@ changelog:
       - '^ci:'
       - Merge pull request
       - Merge branch
-
-brews:
-  - name: settingssentry
-    tap:
-      owner: sstraus
-      name: homebrew-tap
-    folder: Formula
-    homepage: https://github.com/sstraus/SettingsSentry
-    description: Securely archive and reinstate your macOS application configurations
-    license: MIT
-    test: |
-      system "#{bin}/SettingsSentry --version"
-    install: |
-      bin.install "SettingsSentry"

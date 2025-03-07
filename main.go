@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -32,7 +31,7 @@ var (
 	// Global dry run flag
 	dryRun bool = false
 	// Global logger
-	appLogger *logger.Logger
+	appLogger *logger.Logger = &logger.Logger{}
 )
 
 // Printer implements the interfaces.Printer interface
@@ -52,19 +51,11 @@ func NewPrinter(appName string) *Printer {
 func (p *Printer) Print(format string, args ...interface{}) {
 	if p.firstPrint {
 		// Prepend printAppName for the first print
-		if appLogger != nil {
-			appLogger.Logf("%s "+format, append([]interface{}{p.printAppName}, args...)...)
-		} else {
-			fmt.Printf("%s "+format+"\n", append([]interface{}{p.printAppName}, args...)...)
-		}
+		appLogger.Logf("%s "+format, append([]interface{}{p.printAppName}, args...)...)
 		p.firstPrint = false // Reset the state after printing for the first time
 	} else {
 		// Normal print for subsequent calls
-		if appLogger != nil {
-			appLogger.Logf(format, args...)
-		} else {
-			fmt.Printf(format+"\n", args...)
-		}
+		appLogger.Logf(format, args...)
 	}
 }
 
@@ -106,7 +97,7 @@ func getXDGConfigHome() (string, error) {
 
 	// Ensure XDG_CONFIG_HOME is within the home directory
 	if !strings.HasPrefix(xdgConfigHome, homeDir) {
-		return "", fmt.Errorf("$XDG_CONFIG_HOME: %s must be somewhere within your home directory: %s", xdgConfigHome, homeDir)
+		return "", appLogger.LogErrorf("$XDG_CONFIG_HOME: %s must be somewhere within your home directory: %s", xdgConfigHome, homeDir)
 	}
 
 	return xdgConfigHome, nil
@@ -125,13 +116,13 @@ func get_iCloud_folder_location() (string, error) {
 	// Check if the directory exists
 	_, err = fs.Stat(iCloudPath)
 	if err != nil {
-		return "", fmt.Errorf("iCloud Drive folder not found: %w", err)
+		return "", appLogger.LogErrorf("iCloud Drive folder not found: %w", err)
 	}
 
 	// Resolve any symlinks
 	resolvedPath, err := fs.EvalSymlinks(iCloudPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve iCloud Drive path: %w", err)
+		return "", appLogger.LogErrorf("failed to resolve iCloud Drive path: %w", err)
 	}
 
 	return resolvedPath, nil
@@ -168,7 +159,7 @@ func validateConfig(config Config) error {
 		if strings.HasPrefix(file, "~") {
 			homeDir, err := getHomeDirectory()
 			if err != nil {
-				return fmt.Errorf("failed to expand ~ in path %s: %w", file, err)
+				return appLogger.LogErrorf("failed to expand ~ in path %s: %w", file, err)
 			}
 
 			expandedPath := strings.Replace(file, "~", homeDir, 1)
@@ -177,7 +168,7 @@ func validateConfig(config Config) error {
 				// Check if the pattern is valid (contains directory that exists)
 				dir := filepath.Dir(expandedPath)
 				if _, err := fs.Stat(dir); err != nil {
-					return fmt.Errorf("directory for glob pattern %s does not exist: %w", file, err)
+					return appLogger.LogErrorf("directory for glob pattern %s does not exist: %w", file, err)
 				}
 			}
 		}
@@ -193,7 +184,7 @@ func parseConfig(filePath string) (Config, error) {
 	// Read the file
 	data, err := fs.ReadFile(filePath)
 	if err != nil {
-		return config, fmt.Errorf("failed to read config file: %w", err)
+		return config, appLogger.LogErrorf("failed to read config file: %w", err)
 	}
 
 	// Create a scanner to read the file line by line
@@ -245,13 +236,13 @@ func parseConfig(filePath string) (Config, error) {
 			// Handle XDG configuration files
 			path := expandEnvVars(line)
 			if strings.HasPrefix(path, "/") {
-				return config, fmt.Errorf("unsupported absolute path in xdg_configuration_files: %s", path)
+				return config, appLogger.LogErrorf("unsupported absolute path in xdg_configuration_files: %s", path)
 			}
 
 			// Get XDG_CONFIG_HOME
 			xdgConfigHome, err := getXDGConfigHome()
 			if err != nil {
-				return config, fmt.Errorf("error getting XDG_CONFIG_HOME: %w", err)
+				return config, appLogger.LogErrorf("error getting XDG_CONFIG_HOME: %w", err)
 			}
 
 			// Combine with XDG_CONFIG_HOME
@@ -260,7 +251,7 @@ func parseConfig(filePath string) (Config, error) {
 			// Make path relative to home directory
 			homeDir, err := getHomeDirectory()
 			if err != nil {
-				return config, fmt.Errorf("error getting home directory: %w", err)
+				return config, appLogger.LogErrorf("error getting home directory: %w", err)
 			}
 
 			relativePath := strings.Replace(fullPath, homeDir+"/", "", 1)
@@ -278,12 +269,12 @@ func parseConfig(filePath string) (Config, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return config, fmt.Errorf("error scanning config file: %w", err)
+		return config, appLogger.LogErrorf("error scanning config file: %w", err)
 	}
 
 	// Validate the configuration
 	if err := validateConfig(config); err != nil {
-		return config, fmt.Errorf("invalid configuration in %s: %w", filePath, err)
+		return config, appLogger.LogErrorf("invalid configuration in %s: %w", filePath, err)
 	}
 
 	return config, nil
@@ -311,7 +302,7 @@ func getVersionedBackupPath(baseBackupPath string, createNew bool) (string, erro
 	if !dryRun {
 		err := fs.MkdirAll(versionedPath, 0755)
 		if err != nil {
-			return "", fmt.Errorf("failed to create versioned backup directory: %w", err)
+			return "", appLogger.LogErrorf("failed to create versioned backup directory: %w", err)
 		}
 	}
 
@@ -323,13 +314,13 @@ func getLatestVersionPath(baseBackupPath string) (string, error) {
 	// Check if the base path exists
 	_, err := fs.Stat(baseBackupPath)
 	if err != nil {
-		return "", fmt.Errorf("backup path does not exist: %w", err)
+		return "", appLogger.LogErrorf("backup path does not exist: %w", err)
 	}
 
 	// Read the directory entries
 	entries, err := fs.ReadDir(baseBackupPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read backup directory: %w", err)
+		return "", appLogger.LogErrorf("failed to read backup directory: %w", err)
 	}
 
 	// Find the latest version (based on directory name format YYYYMMDD-HHMMSS)
@@ -355,7 +346,7 @@ func getLatestVersionPath(baseBackupPath string) (string, error) {
 	}
 
 	if latestEntry == nil {
-		return "", fmt.Errorf("no version backups found in %s", baseBackupPath)
+		return "", appLogger.LogErrorf("no version backups found in %s", baseBackupPath)
 	}
 
 	return fs.Join(baseBackupPath, latestEntry.Name()), nil
@@ -377,7 +368,7 @@ func cleanupOldVersions(baseBackupPath string, maxVersions int) error {
 	// Read the directory entries
 	entries, err := fs.ReadDir(baseBackupPath)
 	if err != nil {
-		return fmt.Errorf("failed to read backup directory: %w", err)
+		return appLogger.LogErrorf("failed to read backup directory: %w", err)
 	}
 
 	// Collect all version directories with their timestamps
@@ -416,32 +407,16 @@ func cleanupOldVersions(baseBackupPath string, maxVersions int) error {
 		for i := maxVersions; i < len(versions); i++ {
 			_, err := fs.Stat(versions[i].path)
 			if err != nil {
-				if appLogger != nil {
-					appLogger.Logf("Skipping version that no longer exists: %s", versions[i].path)
-				} else {
-					fmt.Printf("Skipping version that no longer exists: %s\n", versions[i].path)
-				}
+				appLogger.Logf("Skipping version that no longer exists: %s", versions[i].path)
 				continue
 			}
 			if dryRun {
-				if appLogger != nil {
-					appLogger.Logf("Would remove old version: %s", versions[i].path)
-				} else {
-					fmt.Printf("Would remove old version: %s\n", versions[i].path)
-				}
+				appLogger.Logf("Would remove old version: %s", versions[i].path)
 			} else {
-				if appLogger != nil {
-					appLogger.Logf("Removing old version: %s", versions[i].path)
-				} else {
-					fmt.Printf("Removing old version: %s\n", versions[i].path)
-				}
+				appLogger.Logf("Removing old version: %s", versions[i].path)
 				err := fs.RemoveAll(versions[i].path)
 				if err != nil {
-					if appLogger != nil {
-						appLogger.Logf("Failed to remove old version %s: %v", versions[i].path, err)
-					} else {
-						fmt.Printf("Failed to remove old version %s: %v\n", versions[i].path, err)
-					}
+					appLogger.Logf("Failed to remove old version %s: %v", versions[i].path, err)
 				}
 			}
 		}
@@ -454,24 +429,24 @@ func cleanupOldVersions(baseBackupPath string, maxVersions int) error {
 func copyFile(src, dst string) error {
 	srcFile, err := fs.Open(src)
 	if err != nil {
-		return fmt.Errorf("failed to open source file: %w", err)
+		return appLogger.LogErrorf("failed to open source file: %w", err)
 	}
 	defer srcFile.Close()
 
 	err = fs.MkdirAll(fs.Dir(dst), 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create destination directory: %w", err)
+		return appLogger.LogErrorf("failed to create destination directory: %w", err)
 	}
 
 	dstFile, err := fs.Create(dst)
 	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
+		return appLogger.LogErrorf("failed to create destination file: %w", err)
 	}
 	defer dstFile.Close()
 
 	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
-		return fmt.Errorf("failed to copy file contents: %w", err)
+		return appLogger.LogErrorf("failed to copy file contents: %w", err)
 	}
 	return nil
 }
@@ -481,19 +456,19 @@ func copyDirectory(src, dst string) error {
 	// Get file info for the source directory
 	srcInfo, err := fs.Stat(src)
 	if err != nil {
-		return fmt.Errorf("failed to get source directory info: %w", err)
+		return appLogger.LogErrorf("failed to get source directory info: %w", err)
 	}
 
 	// Create the destination directory
 	err = fs.MkdirAll(dst, srcInfo.Mode())
 	if err != nil {
-		return fmt.Errorf("failed to create destination directory: %w", err)
+		return appLogger.LogErrorf("failed to create destination directory: %w", err)
 	}
 
 	// Read the source directory
 	entries, err := fs.ReadDir(src)
 	if err != nil {
-		return fmt.Errorf("failed to read source directory: %w", err)
+		return appLogger.LogErrorf("failed to read source directory: %w", err)
 	}
 
 	// Copy each entry
@@ -540,11 +515,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 	if !strings.Contains(configFolder, string(os.PathSeparator)) {
 		exePath, err := os.Executable() // Get the path of the executable
 		if err != nil {
-			if appLogger != nil {
-				appLogger.Logf("Error getting executable path: %v", err)
-			} else {
-				fmt.Printf("Error getting executable path: %v\n", err)
-			}
+			appLogger.Logf("Error getting executable path: %v", err)
 			return
 		}
 		configFolder = fs.Join(fs.Dir(exePath), configFolder) // Append to the executable directory
@@ -553,30 +524,18 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 	// Validate the config folder exists
 	_, err := fs.Stat(configFolder)
 	if err != nil {
-		if appLogger != nil {
-			appLogger.Logf("Config folder does not exist or is not accessible: %v", err)
-		} else {
-			fmt.Printf("Config folder does not exist or is not accessible: %v\n", err)
-		}
+		appLogger.Logf("Config folder does not exist or is not accessible: %v", err)
 		return
 	}
 
 	// Validate the backup folder exists or create it
 	if isBackup {
 		if dryRun {
-			if appLogger != nil {
-				appLogger.Logf("Would create backup folder: %s", backupFolder)
-			} else {
-				fmt.Printf("Would create backup folder: %s\n", backupFolder)
-			}
+			appLogger.Logf("Would create backup folder: %s", backupFolder)
 		} else {
 			err = fs.MkdirAll(backupFolder, 0755)
 			if err != nil {
-				if appLogger != nil {
-					appLogger.Logf("Failed to create backup folder: %v", err)
-				} else {
-					fmt.Printf("Failed to create backup folder: %v\n", err)
-				}
+				appLogger.Logf("Failed to create backup folder: %v", err)
 				return
 			}
 		}
@@ -584,32 +543,20 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 		// For restore, the backup folder must exist
 		_, err := fs.Stat(backupFolder)
 		if err != nil {
-			if appLogger != nil {
-				appLogger.Logf("Backup folder does not exist or is not accessible: %v", err)
-			} else {
-				fmt.Printf("Backup folder does not exist or is not accessible: %v\n", err)
-			}
+			appLogger.Logf("Backup folder does not exist or is not accessible: %v", err)
 			return
 		}
 	}
 
 	files, err := fs.ReadDir(configFolder)
 	if err != nil {
-		if appLogger != nil {
-			appLogger.Logf("Error reading config folder: %v", err)
-		} else {
-			fmt.Printf("Error reading config folder: %v\n", err)
-		}
+		appLogger.Logf("Error reading config folder: %v", err)
 		return
 	}
 
 	homeDir, err := getHomeDirectory()
 	if err != nil {
-		if appLogger != nil {
-			appLogger.Logf("Error getting home directory: %v", err)
-		} else {
-			fmt.Printf("Error getting home directory: %v\n", err)
-		}
+		appLogger.Logf("Error getting home directory: %v", err)
 		return
 	}
 
@@ -626,11 +573,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 		// Parse the configuration file
 		config, err := parseConfig(fs.Join(configFolder, file.Name()))
 		if err != nil {
-			if appLogger != nil {
-				appLogger.Logf("Error parsing configuration file %s: %v", file.Name(), err)
-			} else {
-				fmt.Printf("Error parsing configuration file %s: %v\n", file.Name(), err)
-			}
+			appLogger.Logf("Error parsing configuration file %s: %v", file.Name(), err)
 			continue
 		}
 
@@ -648,17 +591,13 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 				// Execute command with recovery
 				err := safeExecute("pre-backup command execution", func() error {
 					if !executeCommandLine(backupCommand) {
-						return fmt.Errorf("command execution failed")
+						return appLogger.LogErrorf("command execution failed")
 					}
 					return nil
 				})
 
 				if err != nil {
-					if appLogger != nil {
-						appLogger.Logf("Failed to execute pre-backup command: %v", err)
-					} else {
-						fmt.Printf("Failed to execute pre-backup command: %v\n", err)
-					}
+					appLogger.Logf("Failed to execute pre-backup command: %v", err)
 				}
 			}
 			for _, backupCommand := range config.PostBackupCommands {
@@ -671,17 +610,13 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 				// Execute command with recovery
 				err := safeExecute("post-backup command execution", func() error {
 					if !executeCommandLine(backupCommand) {
-						return fmt.Errorf("command execution failed")
+						return appLogger.LogErrorf("command execution failed")
 					}
 					return nil
 				})
 
 				if err != nil {
-					if appLogger != nil {
-						appLogger.Logf("Failed to execute post-backup command: %v", err)
-					} else {
-						fmt.Printf("Failed to execute post-backup command: %v\n", err)
-					}
+					appLogger.Logf("Failed to execute post-backup command: %v", err)
 				}
 			}
 		}
@@ -715,11 +650,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 				} else {
 					err = fs.MkdirAll(fs.Dir(versionedBackupPath), 0755)
 					if err != nil {
-						if appLogger != nil {
-							appLogger.Logf("Failed to create versioned backup directory: %v", err)
-						} else {
-							fmt.Printf("Failed to create versioned backup directory: %v\n", err)
-						}
+						appLogger.Logf("Failed to create versioned backup directory: %v", err)
 						continue
 					}
 				}
@@ -727,11 +658,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 				// For restore operations, find the latest version
 				latestVersion, err = getLatestVersionPath(backupFolder)
 				if err != nil {
-					if appLogger != nil {
-						appLogger.Logf("Failed to find latest version: %v", err)
-					} else {
-						fmt.Printf("Failed to find latest version: %v\n", err)
-					}
+					appLogger.Logf("Failed to find latest version: %v", err)
 					continue
 				}
 				versionedBackupPath = fs.Join(latestVersion, fs.Base(configFile))
@@ -782,11 +709,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 				})
 
 				if err != nil {
-					if appLogger != nil {
-						appLogger.Logf("Backup operation failed for %s: %v", configFile, err)
-					} else {
-						fmt.Printf("Backup operation failed for %s: %v\n", configFile, err)
-					}
+					appLogger.Logf("Backup operation failed for %s: %v", configFile, err)
 				}
 			} else {
 				// Restore operation with recovery
@@ -840,11 +763,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 				})
 
 				if err != nil {
-					if appLogger != nil {
-						appLogger.Logf("Restore operation failed for %s: %v", configFile, err)
-					} else {
-						fmt.Printf("Restore operation failed for %s: %v\n", configFile, err)
-					}
+					appLogger.Logf("Restore operation failed for %s: %v", configFile, err)
 				}
 			}
 		}
@@ -860,17 +779,13 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 				// Execute command with recovery
 				err := safeExecute("pre-restore command execution", func() error {
 					if !executeCommandLine(restoreCommand) {
-						return fmt.Errorf("command execution failed")
+						return appLogger.LogErrorf("command execution failed")
 					}
 					return nil
 				})
 
 				if err != nil {
-					if appLogger != nil {
-						appLogger.Logf("Failed to execute pre-restore command: %v", err)
-					} else {
-						fmt.Printf("Failed to execute pre-restore command: %v\n", err)
-					}
+					appLogger.Logf("Failed to execute pre-restore command: %v", err)
 				}
 			}
 			for _, restoreCommand := range config.PostRestoreCommands {
@@ -883,17 +798,13 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 				// Execute command with recovery
 				err := safeExecute("post-restore command execution", func() error {
 					if !executeCommandLine(restoreCommand) {
-						return fmt.Errorf("command execution failed")
+						return appLogger.LogErrorf("command execution failed")
 					}
 					return nil
 				})
 
 				if err != nil {
-					if appLogger != nil {
-						appLogger.Logf("Failed to execute post-restore command: %v", err)
-					} else {
-						fmt.Printf("Failed to execute post-restore command: %v\n", err)
-					}
+					appLogger.Logf("Failed to execute post-restore command: %v", err)
 				}
 			}
 		}
@@ -901,19 +812,11 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 	// Cleanup old versions if needed
 	if isBackup && versionsToKeep > 0 {
 		if dryRun {
-			if appLogger != nil {
-				appLogger.Logf("Would clean up old versions in %s (keeping %d newest versions)", backupFolder, versionsToKeep)
-			} else {
-				fmt.Printf("Would clean up old versions in %s (keeping %d newest versions)\n", backupFolder, versionsToKeep)
-			}
+			appLogger.Logf("Would clean up old versions in %s (keeping %d newest versions)", backupFolder, versionsToKeep)
 		} else {
 			err := cleanupOldVersions(backupFolder, versionsToKeep)
 			if err != nil {
-				if appLogger != nil {
-					appLogger.Logf("Failed to cleanup old versions: %v", err)
-				} else {
-					fmt.Printf("Failed to cleanup old versions: %v\n", err)
-				}
+				appLogger.Logf("Failed to cleanup old versions: %v", err)
 			}
 		}
 	}
@@ -960,19 +863,10 @@ func getEnvWithDefault(key, defaultValue string) string {
 
 func main() {
 	// Parse command-line flags first to get the logFilePath
-	logFilePath := flag.String("logfile", "", "Optional: Path to log file. If provided, logs will be written to this file in addition to console output")
+	flag.String("logfile", "", "Optional: Path to log file. If provided, logs will be written to this file in addition to console output")
 
 	// We need to do a preliminary parse to get the logFilePath
 	flag.Parse()
-
-	// Initialize logger early
-	var err error
-	appLogger, err = logger.NewLogger(*logFilePath)
-	if err != nil {
-		fmt.Printf("Error initializing logger: %v\n", err)
-		os.Exit(1)
-	}
-	defer appLogger.Close()
 
 	// Reset flags for proper parsing later
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
@@ -989,11 +883,7 @@ func main() {
 
 	icloud_path, err := get_iCloud_folder_location()
 	if err != nil {
-		if appLogger != nil {
-			appLogger.Logf("Error: iCloud path not found - %v", err)
-		} else {
-			fmt.Printf("Error: iCloud path not found - %v\n", err)
-		}
+		appLogger.Logf("Error: iCloud path not found - %v", err)
 		return // Add return here to prevent proceeding without a valid path
 	}
 
@@ -1058,7 +948,7 @@ func main() {
 
 	// Parse flags for custom handling based on the specified action
 	if err := flag.CommandLine.Parse(os.Args[2:]); err != nil {
-		fmt.Printf("Error parsing flags: %v\n", err)
+		appLogger.Logf("Error parsing flags: %v\n", err)
 		return
 	}
 
@@ -1083,39 +973,19 @@ func main() {
 
 		err := cronjob.InstallCronJob(cronExpression)
 		if err != nil {
-			if appLogger != nil {
-				appLogger.Logf("Failed to install cron job: %v", err)
-			} else {
-				fmt.Printf("Failed to install cron job: %v\n", err)
-			}
+			appLogger.Logf("Failed to install cron job: %v", err)
 			os.Exit(1)
 		}
-		if appLogger != nil {
-			appLogger.Logf("CRON job installed successfully")
-		} else {
-			fmt.Printf("CRON job installed successfully\n")
-		}
+		appLogger.Logf("CRON job installed successfully")
 	case "remove":
 		err := cronjob.RemoveCronJob()
 		if err != nil {
-			if appLogger != nil {
-				appLogger.Logf("Failed to remove cron job: %v", err)
-			} else {
-				fmt.Printf("Failed to remove cron job: %v\n", err)
-			}
+			appLogger.Logf("Failed to remove cron job: %v", err)
 			os.Exit(1)
 		}
-		if appLogger != nil {
-			appLogger.Logf("CRON job removed successfully")
-		} else {
-			fmt.Printf("CRON job removed successfully\n")
-		}
+		appLogger.Logf("CRON job removed successfully")
 	default:
-		if appLogger != nil {
-			appLogger.Logf("Invalid action specified. Please use one of the following: 'backup', 'restore', 'install', or 'remove'")
-		} else {
-			fmt.Printf("Invalid action specified. Please use one of the following: 'backup', 'restore', 'install', or 'remove'\n")
-		}
+		appLogger.Logf("Invalid action specified. Please use one of the following: 'backup', 'restore', 'install', or 'remove'")
 		os.Exit(1)
 	}
 }

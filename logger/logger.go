@@ -63,6 +63,13 @@ func (l *Logger) Log(v ...interface{}) {
 	l.logger.Println(v...)
 }
 
+// LogError logs a formatted error message and returns the error
+func (l *Logger) LogErrorf(format string, v ...interface{}) error {
+	logMessage := "Error: " + format
+	l.Logf(logMessage, v...)
+	return fmt.Errorf(logMessage, v...)
+}
+
 // Close closes the log file
 func (l *Logger) Close() {
 	if l.logFile != nil {

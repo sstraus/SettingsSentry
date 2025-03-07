@@ -1,6 +1,8 @@
 package main
 
 import (
+	"SettingsSentry/interfaces"
+	"SettingsSentry/logger"
 	"os"
 	"path/filepath"
 	"testing"
@@ -84,6 +86,8 @@ test restore command
 }
 
 func TestParseConfigWithMissingFile(t *testing.T) {
+	appLogger = &logger.Logger{}
+	fs = interfaces.NewOsFileSystem()
 	// Test parsing a non-existent config file
 	_, err := parseConfig("/nonexistent/file.cfg")
 	if err == nil {
