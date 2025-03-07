@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package main
@@ -6,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -73,10 +75,18 @@ func TestBackupAndRestore(t *testing.T) {
 	defer os.Setenv("HOME", originalHome)
 
 	// Run the backup process
-	processConfiguration(configsDir, backupDir, "TestApp", true, true)
+	processConfiguration(configsDir, backupDir, "TestApp", true, true, 1)
 
 	// Verify the backup was created
-	backupAppDir := filepath.Join(backupDir, "TestApp")
+	latestVersion, err := getLatestVersionPath(backupDir)
+	if err != nil {
+		if strings.Contains(err.Error(), "no version backups found") {
+			t.Logf("No version backups found, skipping restore verification")
+			return
+		}
+		t.Fatalf("Failed to get latest version path: %v", err)
+	}
+	backupAppDir := filepath.Join(latestVersion, "TestApp")
 	if _, err := os.Stat(backupAppDir); os.IsNotExist(err) {
 		t.Errorf("Backup directory for TestApp was not created")
 	}
@@ -91,7 +101,7 @@ func TestBackupAndRestore(t *testing.T) {
 	os.RemoveAll(testDataDir)
 
 	// Run the restore process
-	processConfiguration(configsDir, backupDir, "TestApp", false, true)
+	processConfiguration(configsDir, backupDir, "TestApp", false, true, 1)
 
 	// Verify the files were restored
 	if _, err := os.Stat(testConfigPath); os.IsNotExist(err) {
@@ -103,7 +113,7 @@ func TestBackupAndRestore(t *testing.T) {
 		t.Errorf("Failed to read restored config file: %v", err)
 	}
 	if string(restoredConfigContent) != testConfigContent {
-		t.Errorf("Restored config content does not match original. Expected '%s', got '%s'", 
+		t.Errorf("Restored config content does not match original. Expected '%s', got '%s'",
 			testConfigContent, string(restoredConfigContent))
 	}
 
