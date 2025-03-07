@@ -36,7 +36,6 @@ func TestSafeExecute(t *testing.T) {
 	// but we can at least verify that the function recovers from the panic
 	err = safeExecute("panic operation", func() error {
 		panic("test panic")
-		return nil // This line won't be reached due to the panic
 	})
 	if err != nil {
 		t.Errorf("Expected no error after panic recovery, got: %v", err)

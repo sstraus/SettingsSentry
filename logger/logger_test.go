@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +69,12 @@ func TestNewLogger(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create directory with no permissions: %v", err)
 		}
-		defer os.Chmod(invalidDir, 0755) // Restore permissions for cleanup
+		defer func() {
+			err := os.Chmod(invalidDir, 0755) // Restore permissions for cleanup
+			if err != nil {
+				t.Errorf("Failed to restore permissions for cleanup: %v", err)
+			}
+		}()
 
 		logFilePath = filepath.Join(invalidDir, "test.log")
 		_, err = NewLogger(logFilePath)
@@ -100,7 +104,7 @@ func TestLoggerLogf(t *testing.T) {
 	logger.Logf(testMessage, 123)
 
 	// Read the log file
-	content, err := ioutil.ReadFile(logFilePath)
+	content, err := os.ReadFile(logFilePath)
 	if err != nil {
 		t.Fatalf("Failed to read log file: %v", err)
 	}
@@ -130,7 +134,7 @@ func TestLoggerLog(t *testing.T) {
 	logger.Log("Test", "log", "message")
 
 	// Read the log file
-	content, err := ioutil.ReadFile(logFilePath)
+	content, err := os.ReadFile(logFilePath)
 	if err != nil {
 		t.Fatalf("Failed to read log file: %v", err)
 	}
