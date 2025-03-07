@@ -16,13 +16,11 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - Configuration validation to ensure all required fields are present.
 - Versioned backups with timestamp-based directories.
 - Dry-run mode to preview operations without making changes.
-- Interactive wizard for creating new application configurations.
-- Automatic detection of installed applications and their configuration files.
-- Pre-defined templates for common macOS applications.
+
 
 ## Usage
 
-./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<n>`] [-nocommands] [-dry-run] [-versions=`<n>`]
+./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<n>`] [-nocommands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`]
 
 ### Actions
 
@@ -31,9 +29,6 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - install: Install the application as a CRON job that runs at every reboot.
     You can also provide a valid cron expression as a parameter to customize the schedule (0 9 * * *). Use [cronhub](https://crontab.cronhub.io) to generate a valid one.
 - remove: Remove the previously installed CRON job.
-- wizard: Start the configuration wizard to create a new application configuration.
-- detect: Detect installed applications and create configurations for them.
-- template: Create configuration from a template (use 'template list' to see available templates).
 
 ### Default Values
 
@@ -54,14 +49,17 @@ Backups: iCloud Drive/SettingsSentry
 
 - `--versions` `<n>`: Number of backup versions to keep (default: 1, 0 = keep all).
 
+- `--logfile` `<path>`: Path to log file. If provided, logs will be written to this file in addition to console output.
+
 ### Environment Variables
 
 SettingsSentry supports the following environment variables:
 
-- `SETTINGS_SENTRY_CONFIG_PATH`: Path to the configuration folder.
-- `SETTINGS_SENTRY_BACKUP_PATH`: Path to the backup folder.
-- `SETTINGS_SENTRY_APP_NAME`: Optional name of the application to process.
-- `SETTINGS_SENTRY_DRY_RUN`: Set to 'true' to perform a dry run without making any changes.
+- `SETTINGSSENTRY_CONFIG`: Path to the configuration folder.
+- `SETTINGSSENTRY_BACKUP`: Path to the backup folder.
+- `SETTINGSSENTRY_APP`: Optional name of the application to process.
+- `SETTINGSSENTRY_NO_COMMANDS`: Set to 'true' to prevent command execution during backup or restore.
+- `SETTINGSSENTRY_DRY_RUN`: Set to 'true' to perform a dry run without making any changes.
 
 ### Configuration Files
 
@@ -104,47 +102,6 @@ ${CONFIG_DIR}/.config
 
 Environment variables will be expanded when the configuration is loaded, making it easy to reuse the same configuration across different environments or users.
 
-### Configuration Wizard
-
-The configuration wizard makes it easy to create new application configurations without having to manually edit configuration files. To start the wizard:
-
-```bash
-./SettingsSentry wizard
-```
-
-The wizard will guide you through:
-- Specifying the application name
-- Adding configuration file/directory paths
-- Adding backup commands (optional)
-- Adding restore commands (optional)
-
-### Application Detection
-
-SettingsSentry can automatically detect installed applications and help you create configurations for them:
-
-```bash
-./SettingsSentry detect
-```
-
-This will:
-1. Scan your system for installed applications
-2. Show a list of applications without existing configuration files
-3. Help you create a configuration file for a selected application by suggesting potential configuration paths
-4. For common applications, it will offer to use a pre-defined template
-
-### Application Templates
-
-SettingsSentry includes pre-defined templates for common macOS applications:
-
-```bash
-# List all available templates
-./SettingsSentry template list
-
-# Create a configuration file from a specific template
-./SettingsSentry template vscode
-```
-
-Templates include common configuration paths and appropriate backup/restore commands for popular applications like VSCode, Chrome, Firefox, iTerm2, Homebrew, Git, and many more.
 
 ### Versioned Backups
 
@@ -170,45 +127,6 @@ To use dry-run mode, add the `--dry-run` flag to your command:
 ./SettingsSentry backup --dry-run
 ```
 
-## Tools
-
-### Config Updater
-
-SettingsSentry includes a tool to keep configuration definitions up-to-date with the [Mackup](https://github.com/lra/mackup) project. This tool can:
-
-- Compare local configuration files with Mackup's repository
-- Identify new applications that could be supported
-- Find differences in existing configurations
-- Automatically update or add new configurations
-
-To use the config updater:
-
-```bash
-cd tools/config_updater
-./update_configs.sh
-```
-
-For more information, see the [Config Updater README](tools/config_updater/README.md).
-
-## Development
-
-### Dependency Management
-
-SettingsSentry uses Go modules for dependency management. The project dependencies are defined in the `go.mod` file and are vendored for reproducible builds.
-
-To update dependencies to their latest versions:
-
-```bash
-go get -u ./...
-go mod tidy
-go mod vendor
-```
-
-To build using vendored dependencies:
-
-```bash
-go build -mod=vendor
-```
 
 ## License
 
