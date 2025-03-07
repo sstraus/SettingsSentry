@@ -38,7 +38,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           check-latest: true
 
       - name: Run unit tests
@@ -61,11 +61,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           check-latest: true
 
       - name: Run integration tests
-        run: go test -v -tags=integration ./...
+        run: go test -v -tags=integration -args=-versions=1 ./...
 
   build:
     name: Build
