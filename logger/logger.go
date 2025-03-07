@@ -2,7 +2,6 @@ package logger
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,9 +9,10 @@ import (
 
 // Logger struct
 type Logger struct {
-	logFile *os.File
-	logger  *log.Logger
-	enabled bool
+	logFile   *os.File
+	logger    *log.Logger
+	cliLogger *log.Logger
+	enabled   bool
 }
 
 // NewLogger creates a new logger instance
@@ -37,36 +37,58 @@ func NewLogger(logFilePath string) (*Logger, error) {
 		}
 	}
 
-	var multiWriter io.Writer
+	// Create a logger for file output with timestamps
+	var fileLogger *log.Logger
 	if file != nil {
-		multiWriter = io.MultiWriter(os.Stdout, file)
-	} else {
-		multiWriter = os.Stdout
+		fileLogger = log.New(file, "", log.LstdFlags)
 	}
 
-	logger := log.New(multiWriter, "", log.LstdFlags)
+	// Create a logger for CLI output without timestamps
+	cliLogger := log.New(os.Stdout, "", 0)
 
 	return &Logger{
-		logFile: file,
-		logger:  logger,
-		enabled: logFilePath != "",
+		logFile:   file,
+		logger:    fileLogger,
+		cliLogger: cliLogger,
+		enabled:   logFilePath != "",
 	}, nil
 }
 
 // Logf logs a formatted message
 func (l *Logger) Logf(format string, v ...interface{}) {
-	l.logger.Printf(format, v...)
+	// Log to CLI without timestamp
+	l.cliLogger.Printf(format, v...)
+
+	// Log to file with timestamp if enabled
+	if l.enabled && l.logger != nil {
+		l.logger.Printf(format, v...)
+	}
 }
 
 // Log logs a message
 func (l *Logger) Log(v ...interface{}) {
-	l.logger.Println(v...)
+	// Log to CLI without timestamp
+	l.cliLogger.Println(v...)
+
+	// Log to file with timestamp if enabled
+	if l.enabled && l.logger != nil {
+		l.logger.Println(v...)
+	}
 }
 
 // LogError logs a formatted error message and returns the error
 func (l *Logger) LogErrorf(format string, v ...interface{}) error {
 	logMessage := "Error: " + format
-	l.Logf(logMessage, v...)
+
+	// For CLI, print in red
+	redErrorFormat := "\033[31mError: " + format + "\033[0m"
+	l.cliLogger.Printf(redErrorFormat, v...)
+
+	// For file logging, use normal format
+	if l.enabled && l.logger != nil {
+		l.logger.Printf(logMessage, v...)
+	}
+
 	return fmt.Errorf(logMessage, v...)
 }
 

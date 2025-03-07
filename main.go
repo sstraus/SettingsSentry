@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -863,10 +864,18 @@ func getEnvWithDefault(key, defaultValue string) string {
 
 func main() {
 	// Parse command-line flags first to get the logFilePath
-	flag.String("logfile", "", "Optional: Path to log file. If provided, logs will be written to this file in addition to console output")
+	logFilePath := flag.String("logfile", "", "Optional: Path to log file. If provided, logs will be written to this file in addition to console output")
 
 	// We need to do a preliminary parse to get the logFilePath
 	flag.Parse()
+
+	// Initialize the logger properly
+	var err error
+	appLogger, err = logger.NewLogger(*logFilePath)
+	if err != nil {
+		fmt.Printf("Error initializing logger: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Reset flags for proper parsing later
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
