@@ -1,6 +1,6 @@
 module SettingsSentry
 
-go 1.23.3
+go 1.24
 
 require (
 	github.com/robfig/cron v1.2.0

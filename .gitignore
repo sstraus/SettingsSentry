@@ -1,4 +1,3 @@
-SettingsSentry_v1.0.zip
 .env
 .DS_Store
 goreleaser.yaml
@@ -12,4 +11,7 @@ SettingsSentry.zip
 .vscode/settings.json
 build.sh
 todo.txt
-tools/config_updater/
+#tools/config_updater/
+configs/TestCommand.cfg
+.aider*
+.ra-aid
