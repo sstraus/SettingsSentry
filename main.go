@@ -896,7 +896,7 @@ func main() {
 		return // Add return here to prevent proceeding without a valid path
 	}
 
-	icloud_path = filepath.Join(icloud_path, ".settingssentry_backups")
+	icloud_path = filepath.Join(icloud_path, "settingssentry_backups")
 
 	// Get environment variables with defaults
 	envConfigFolder := getEnvWithDefault("SETTINGSSENTRY_CONFIG", "configs")
