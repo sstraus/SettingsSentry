@@ -580,6 +580,9 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 
 		printer = NewPrinter(config.Name)
 
+		// Create timestamp here to avoid different paths during the backup
+		timestamp := time.Now().Format("20060102-150405")
+
 		if isBackup && !noCommands {
 			for _, backupCommand := range config.PreBackupCommands {
 				// In dry-run mode, just show what would be executed
@@ -638,7 +641,6 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 			var latestVersion string
 			if isBackup {
 				// Create timestamp-based directory
-				timestamp := time.Now().Format("20060102-150405")
 				versionedBackupPath = fs.Join(backupFolder, timestamp, config.Name, fs.Base(configFile))
 
 				_, err := fs.Stat(configFile)
