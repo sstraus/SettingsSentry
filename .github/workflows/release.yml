@@ -24,10 +24,6 @@ jobs:
           go-version: '1.24'
           check-latest: true
 
-<<<<<<< HEAD
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v4
-=======
       - name: Run tests
         run: go test -v ./...
 
@@ -49,7 +45,6 @@ jobs:
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
->>>>>>> 842d95f442f22f3641043e6ccf3b81bb3da85932
         with:
           distribution: goreleaser
           version: latest
