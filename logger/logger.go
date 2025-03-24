@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -52,6 +53,16 @@ func NewLogger(logFilePath string) (*Logger, error) {
 		cliLogger: cliLogger,
 		enabled:   logFilePath != "",
 	}, nil
+}
+
+// GetCliLoggerWriter returns the cliLogger's writer.
+func (l *Logger) GetCliLoggerWriter() io.Writer {
+	return l.cliLogger.Writer()
+}
+
+// SetCliLoggerOutput sets the output writer for the CLI logger.
+func (l *Logger) SetCliLoggerOutput(writer io.Writer) {
+	l.cliLogger.SetOutput(writer)
 }
 
 // Logf logs a formatted message

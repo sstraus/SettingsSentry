@@ -86,10 +86,14 @@ test restore command
 }
 
 func TestParseConfigWithMissingFile(t *testing.T) {
-	appLogger = &logger.Logger{}
+	var err error
+	appLogger, err = logger.NewLogger("")
+	if err != nil {
+		t.Fatalf("failed to initialize logger: %v", err)
+	}
 	fs = interfaces.NewOsFileSystem()
 	// Test parsing a non-existent config file
-	_, err := parseConfig("/nonexistent/file.cfg")
+	_, err = parseConfig("/nonexistent/file.cfg")
 	if err == nil {
 		t.Errorf("parseConfig() did not return an error for a non-existent file")
 	}

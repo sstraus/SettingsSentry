@@ -10,12 +10,17 @@ import (
 )
 
 func TestPrinterPrint(t *testing.T) {
-	// Save stdout and restore it after the test
+	// Save original stdout and logger output
 	oldStdout := os.Stdout
+	originalWriter := appLogger.GetCliLoggerWriter() // Use getter
+
 	r, w, _ := os.Pipe()
 	os.Stdout = w
+	appLogger.SetCliLoggerOutput(w) // Redirect appLogger's output to pipe using setter
+
 	defer func() {
 		os.Stdout = oldStdout
+		appLogger.SetCliLoggerOutput(originalWriter) // Restore original logger output using setter
 	}()
 
 	// Create a printer
