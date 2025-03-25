@@ -561,6 +561,9 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 		return
 	}
 
+	// Create timestamp here to avoid different paths during the backup
+	timestamp := time.Now().Format("20060102-150405")
+
 	for _, file := range files {
 		if file.IsDir() || !strings.HasSuffix(file.Name(), ".cfg") {
 			continue
@@ -579,9 +582,6 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 		}
 
 		printer = NewPrinter(config.Name)
-
-		// Create timestamp here to avoid different paths during the backup
-		timestamp := time.Now().Format("20060102-150405")
 
 		if isBackup && !noCommands {
 			for _, backupCommand := range config.PreBackupCommands {
@@ -664,7 +664,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 					appLogger.Logf("Failed to find latest version: %v", err)
 					continue
 				}
-				versionedBackupPath = fs.Join(latestVersion, fs.Base(configFile))
+				versionedBackupPath = fs.Join(latestVersion, config.Name, fs.Base(configFile))
 			}
 
 			if isBackup {
@@ -726,8 +726,8 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 					// Check if the backup file exists
 					_, err = fs.Stat(versionedBackupPath)
 					if err != nil {
-						printer.Print("Backup file not found: %s", versionedBackupPath)
-						return err
+						// printer.Print("Backup file not found: %s", versionedBackupPath)
+						return nil
 					}
 
 					// In dry-run mode, just show what would be restored
