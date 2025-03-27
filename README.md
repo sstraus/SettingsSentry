@@ -19,7 +19,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 
 ## Usage
 
-./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<n>`] [-nocommands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`]
+./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<n>`] [-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`]
 
 ### Actions
 
@@ -42,7 +42,7 @@ Backups: iCloud Drive/SettingsSentry
 
 - `--app` `<n>`: Optional name of the application to process.
 
-- `-nocommands`: Prevent command execution during backup or restore.
+- `-commands`: Executes pre and post commands during backup or restore where available.
 
 - `--dry-run`: Perform a dry run without making any changes.
 
@@ -57,7 +57,7 @@ SettingsSentry supports the following environment variables:
 - `SETTINGSSENTRY_CONFIG`: Path to the configuration folder.
 - `SETTINGSSENTRY_BACKUP`: Path to the backup folder.
 - `SETTINGSSENTRY_APP`: Optional name of the application to process.
-- `SETTINGSSENTRY_NO_COMMANDS`: Set to 'true' to prevent command execution during backup or restore.
+- `SETTINGSSENTRY_COMMANDS`: Set to 'true' to prevent command execution during backup or restore.
 - `SETTINGSSENTRY_DRY_RUN`: Set to 'true' to perform a dry run without making any changes.
 
 ### Configuration Files

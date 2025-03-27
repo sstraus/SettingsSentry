@@ -41,7 +41,7 @@ func TestAddCronJob(t *testing.T) {
 	withCrontabBackup(t, func() {
 		// Test adding a cron job
 		schedule := "@reboot"
-		err := AddCronJob(&schedule, "-nocommands")
+		err := AddCronJob(&schedule, "-commands")
 		if err != nil {
 			t.Errorf("AddCronJob() returned an error: %v", err)
 		}
@@ -65,7 +65,7 @@ func TestRemoveCronJob(t *testing.T) {
 	withCrontabBackup(t, func() {
 		// First add a cron job
 		schedule := "@reboot"
-		err := AddCronJob(&schedule, "-nocommands")
+		err := AddCronJob(&schedule, "-commands")
 		if err != nil {
 			t.Errorf("AddCronJob() returned an error: %v", err)
 		}
@@ -105,7 +105,7 @@ func TestIsCronJobInstalled(t *testing.T) {
 
 		// Now add a cron job and check again
 		schedule := "@reboot"
-		err = AddCronJob(&schedule, "-nocommands")
+		err = AddCronJob(&schedule, "-commands")
 		if err != nil {
 			t.Errorf("AddCronJob() returned an error: %v", err)
 		}
@@ -125,7 +125,7 @@ func TestAddCronJobWithInvalidSchedule(t *testing.T) {
 	withCrontabBackup(t, func() {
 		// Test with an invalid cron expression
 		schedule := "invalid cron"
-		err := AddCronJob(&schedule, "-nocommands")
+		err := AddCronJob(&schedule, "-commands")
 		if err == nil {
 			t.Errorf("AddCronJob() did not return an error for invalid cron expression")
 		}

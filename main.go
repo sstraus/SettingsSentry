@@ -507,7 +507,7 @@ func safeExecute(operation string, fn func() error) error {
 }
 
 // processConfiguration processes configuration files for backup or restore.
-func processConfiguration(configFolder, backupFolder, appName string, isBackup bool, noCommands bool, versionsToKeep int) {
+func processConfiguration(configFolder, backupFolder, appName string, isBackup bool, commands bool, versionsToKeep int) {
 	// Expand environment variables in paths
 	configFolder = expandEnvVars(configFolder)
 	backupFolder = expandEnvVars(backupFolder)
@@ -583,7 +583,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 
 		printer = NewPrinter(config.Name)
 
-		if isBackup && !noCommands {
+		if isBackup && commands {
 			for _, backupCommand := range config.PreBackupCommands {
 				// In dry-run mode, just show what would be executed
 
@@ -771,7 +771,7 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 			}
 		}
 
-		if !isBackup && !noCommands {
+		if !isBackup && commands {
 			for _, restoreCommand := range config.PreRestoreCommands {
 				// In dry-run mode, just show what would be executed
 				if dryRun {
@@ -904,21 +904,21 @@ func main() {
 	envConfigFolder := getEnvWithDefault("SETTINGSSENTRY_CONFIG", "configs")
 	envBackupFolder := getEnvWithDefault("SETTINGSSENTRY_BACKUP", icloud_path)
 	envAppName := os.Getenv("SETTINGSSENTRY_APP")
-	envNoCommands := os.Getenv("SETTINGSSENTRY_NO_COMMANDS") == "true"
+	envCommands := os.Getenv("SETTINGSSENTRY_COMMANDS") == "true"
 	envDryRun := os.Getenv("SETTINGSSENTRY_DRY_RUN") == "true"
 
 	// Define shared command-line flags with environment variable defaults
 	configFolder := flag.String("config", envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
 	backupFolder := flag.String("backup", envBackupFolder, "Path to the backup folder (env: SETTINGSSENTRY_BACKUP)")
 	appName := flag.String("app", envAppName, "Optional: Name of the application to process (env: SETTINGSSENTRY_APP)")
-	noCommands := flag.Bool("nocommands", envNoCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_NO_COMMANDS)")
+	commands := flag.Bool("commands", envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
 	dryRunFlag := flag.Bool("dry-run", envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
 	versionsToKeep := flag.Int("versions", 1, "Number of backup versions to keep")
 	// logFilePath is already defined at the beginning of main
 
 	// Define a function to display help information
 	showHelp := func() {
-		appLogger.Logf("Usage: SettingsSentry <action> [-config=<path>] [-backup=<path>] [-app=<n>] [-nocommands] [-logfile=<path>] [-dry-run]")
+		appLogger.Logf("Usage: SettingsSentry <action> [-config=<path>] [-backup=<path>] [-app=<n>] [-commands] [-logfile=<path>] [-dry-run]")
 		appLogger.Logf("Actions:")
 		appLogger.Logf("  backup   - Backup configuration files to the specified backup folder")
 		appLogger.Logf("  restore  - Restore the files to their original locations")
@@ -972,9 +972,9 @@ func main() {
 
 	switch action {
 	case "backup":
-		processConfiguration(*configFolder, *backupFolder, *appName, true, *noCommands, *versionsToKeep)
+		processConfiguration(*configFolder, *backupFolder, *appName, true, *commands, *versionsToKeep)
 	case "restore":
-		processConfiguration(*configFolder, *backupFolder, *appName, false, *noCommands, *versionsToKeep)
+		processConfiguration(*configFolder, *backupFolder, *appName, false, *commands, *versionsToKeep)
 	case "install":
 		// Check if a cron expression is provided
 		cronExpression := ""
