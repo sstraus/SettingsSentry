@@ -26,8 +26,9 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
     files:
-      - configs/**
-checksum:
+      - configs/**        # Include everything in configs...
+      - "!configs/TestCommand.cfg" # ...except this specific file
+checksum: # Correct indentation
   name_template: 'checksums.txt'
 
 

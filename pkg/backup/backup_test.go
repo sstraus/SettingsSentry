@@ -3,6 +3,7 @@ package backup
 import (
 	"SettingsSentry/interfaces"
 	"SettingsSentry/logger"
+	"SettingsSentry/pkg/config"
 	"SettingsSentry/pkg/printer"
 	"SettingsSentry/pkg/util"
 	"os"
@@ -15,8 +16,11 @@ func setupBackupTestDependencies() {
 	testFs := interfaces.NewOsFileSystem()
 	testPrinter := printer.NewPrinter("Test", testLogger)
 	util.InitGlobals(testLogger, testFs, nil, false, "")
+	// Initialize Fs and AppLogger in both backup and config packages
 	AppLogger = util.AppLogger
 	Fs = util.Fs
+	config.Fs = util.Fs               // Initialize config.Fs as well
+	config.AppLogger = util.AppLogger // Ensure config.AppLogger is also set
 	DryRun = util.DryRun
 	Printer = testPrinter
 }

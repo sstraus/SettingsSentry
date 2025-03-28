@@ -16,6 +16,8 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - Configuration validation to ensure all required fields are present.
 - Versioned backups with timestamp-based directories.
 - Dry-run mode to preview operations without making changes.
+- Optional ZIP archive backup format (`-zip` flag).
+
 
 ## Usage
 
@@ -48,6 +50,9 @@ Backups: iCloud Drive/settingssentry_backups
 - `--dry-run`: Perform a dry run without making any changes.
 
 - `--versions` `<n>`: Number of backup versions to keep (default: 1, 0 = keep all).
+
+- `-zip`: Create backup as a timestamped `.zip` archive instead of a directory (backup action only).
+
 
 - `--logfile` `<path>`: Path to log file. If provided, logs will be written to this file in addition to console output.
 

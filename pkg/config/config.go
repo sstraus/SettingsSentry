@@ -5,6 +5,7 @@ import (
 	"SettingsSentry/logger"
 	"bufio"
 	"errors"
+	"fmt" // Keep one fmt import
 	iofs "io/fs"
 	"os"
 	"path/filepath"
@@ -243,11 +244,14 @@ func ParseConfig(filesystem iofs.FS, filePath string) (Config, error) {
 		return config, errors.New("error scanning config file")
 	}
 
-	if err := ValidateConfig(config); err != nil {
+	if validationErr := ValidateConfig(config); validationErr != nil {
+		// Log the specific validation error
+		detailedError := fmt.Errorf("invalid configuration in '%s': %w", filePath, validationErr)
 		if AppLogger != nil {
-			return config, AppLogger.LogErrorf("invalid configuration in %s: %w", filePath, err)
+			// LogErrorf already returns an error, just return it
+			return config, AppLogger.LogErrorf(detailedError.Error()) // Log the detailed error
 		}
-		return config, errors.New("invalid configuration")
+		return config, detailedError // Return the detailed error
 	}
 
 	return config, nil

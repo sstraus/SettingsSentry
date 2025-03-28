@@ -16,4 +16,5 @@ configs/TestCommand.cfg
 .rooignore
 .roomodes
 .gitignore
-SettingsSentry.app
+memory-bank/
+

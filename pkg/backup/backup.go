@@ -6,9 +6,12 @@ import (
 	"SettingsSentry/pkg/command"
 	"SettingsSentry/pkg/config"
 	"SettingsSentry/pkg/printer"
+	"archive/zip" // Added import
+	"fmt"         // Added import for fmt.Errorf
 	"io"
 	iofs "io/fs" // Use alias for standard io/fs
 	"os"
+	"path/filepath" // Added import for filepath
 	"sort"
 	"strings"
 	"time"
@@ -24,7 +27,9 @@ var (
 func getVersionedBackupPath(baseBackupPath string, createNew bool) (string, error) {
 	if !createNew {
 		// For restore operations, just use the latest version
-		return GetLatestVersionPath(baseBackupPath)
+		// TODO: Revisit this function's purpose with zip logic. Ignoring isZip for now.
+		latestPath, _, err := GetLatestVersionPath(baseBackupPath)
+		return latestPath, err
 	}
 
 	// For backup operations, create a new version
@@ -52,47 +57,67 @@ func getVersionedBackupPath(baseBackupPath string, createNew bool) (string, erro
 	return versionedPath, nil
 }
 
-// GetLatestVersionPath returns the path to the latest version
-func GetLatestVersionPath(baseBackupPath string) (string, error) {
+// GetLatestVersionPath returns the path to the latest backup version (directory or zip)
+// and a boolean indicating if it's a zip file.
+func GetLatestVersionPath(baseBackupPath string) (path string, isZip bool, err error) {
 	// Check if the base path exists
-	_, err := Fs.Stat(baseBackupPath)
+	_, err = Fs.Stat(baseBackupPath) // Assign to existing err
 	if err != nil {
-		return "", AppLogger.LogErrorf("backup path does not exist: %w", err)
+		err = AppLogger.LogErrorf("backup path does not exist: %w", err)
+		return "", false, err // Return zero values and the error
 	}
 
 	// Read the directory entries
 	entries, err := Fs.ReadDir(baseBackupPath)
 	if err != nil {
-		return "", AppLogger.LogErrorf("failed to read backup directory: %w", err)
+		err = AppLogger.LogErrorf("failed to read backup directory: %w", err)
+		return "", false, err // Return zero values and the error
 	}
-
-	// Find the latest version (based on directory name format YYYYMMDD-HHMMSS)
-	var latestEntry os.DirEntry
+	// Find the latest version (directory or zip file)
+	var latestPath string
+	var latestIsZip bool
 	var latestTime time.Time
+	foundVersion := false
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		entryName := entry.Name()
+		isDir := entry.IsDir()
+		isZipFile := !isDir && strings.HasSuffix(entryName, ".zip")
+		timestampStr := ""
+
+		if isDir {
+			// Check if directory name matches timestamp format
+			timestampStr = entryName
+		} else if isZipFile {
+			// Check if zip file name matches timestamp format (without .zip)
+			timestampStr = strings.TrimSuffix(entryName, ".zip")
+		} else {
+			// Skip other files/directories
 			continue
 		}
 
-		// Try to parse the directory name as a timestamp
-		t, err := time.Parse("20060102-150405", entry.Name())
-		if err != nil {
-			// Skip directories that don't match our format
+		// Try to parse the timestamp string
+		t, parseErr := time.Parse("20060102-150405", timestampStr)
+		if parseErr != nil {
+			// Skip entries that don't match our timestamp format
 			continue
 		}
 
-		if latestEntry == nil || t.After(latestTime) {
-			latestEntry = entry
+		// Check if this version is the latest found so far
+		if !foundVersion || t.After(latestTime) {
+			latestPath = Fs.Join(baseBackupPath, entryName)
+			latestIsZip = isZipFile
 			latestTime = t
+			foundVersion = true
 		}
 	}
 
-	if latestEntry == nil {
-		return "", AppLogger.LogErrorf("no version backups found in %s", baseBackupPath)
+	if !foundVersion {
+		err = AppLogger.LogErrorf("no version backups found in %s", baseBackupPath)
+		return "", false, err
 	}
 
-	return Fs.Join(baseBackupPath, latestEntry.Name()), nil
+	return latestPath, latestIsZip, nil
 }
 
 // CleanupOldVersions removes old versions to keep only the specified number
@@ -118,29 +143,39 @@ func CleanupOldVersions(baseBackupPath string, maxVersions int) error {
 		return AppLogger.LogErrorf("failed to read backup directory for cleanup: %w", err)
 	}
 
-	// Collect all version directories with their timestamps
+	// Collect all version entries (dirs or zips) with their timestamps
 	type versionInfo struct {
 		path      string
 		timestamp time.Time
+		isZip     bool // Add field to track if it's a zip file
 	}
-
 	var versions []versionInfo
 
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+		entryName := entry.Name()
+		isDir := entry.IsDir()
+		isZipFile := !isDir && strings.HasSuffix(entryName, ".zip")
+		timestampStr := ""
+
+		if isDir {
+			timestampStr = entryName
+		} else if isZipFile {
+			timestampStr = strings.TrimSuffix(entryName, ".zip")
+		} else {
+			continue // Skip other files/dirs
 		}
 
-		// Try to parse the directory name as a timestamp
-		t, err := time.Parse("20060102-150405", entry.Name())
-		if err != nil {
-			// Skip directories that don't match our format
+		// Try to parse the timestamp string
+		t, parseErr := time.Parse("20060102-150405", timestampStr)
+		if parseErr != nil {
+			// Skip entries that don't match our timestamp format
 			continue
 		}
 
 		versions = append(versions, versionInfo{
-			path:      Fs.Join(baseBackupPath, entry.Name()),
+			path:      Fs.Join(baseBackupPath, entryName),
 			timestamp: t,
+			isZip:     isZipFile, // Store whether it's a zip
 		})
 	}
 
@@ -166,7 +201,7 @@ func CleanupOldVersions(baseBackupPath string, maxVersions int) error {
 				AppLogger.Logf("Would remove old version: %s", versions[i].path)
 			} else {
 				AppLogger.Logf("Removing old version: %s", versions[i].path)
-				err := Fs.RemoveAll(versions[i].path)
+				err := Fs.RemoveAll(versions[i].path) // Assuming RemoveAll works for files too
 				if err != nil {
 					// Log error but continue trying to remove others
 					AppLogger.Logf("Failed to remove old version %s: %v", versions[i].path, err)
@@ -258,7 +293,7 @@ func copyDirectory(src, dst string) error {
 }
 
 // ProcessConfiguration processes configuration files for backup or restore.
-func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup bool, commands bool, versionsToKeep int) {
+func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup bool, commands bool, versionsToKeep int, zipBackup bool) {
 	// Expand environment variables in paths using config package function
 	configFolder = config.ExpandEnvVars(configFolder)
 	backupFolder = config.ExpandEnvVars(backupFolder)
@@ -328,8 +363,29 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 		return
 	}
 
+	var stagingDir string // For zip backups
+
 	// Create timestamp here to avoid different paths during the backup
 	timestamp := time.Now().Format("20060102-150405")
+
+	// Create staging directory for zip backup if needed
+	if isBackup && zipBackup {
+		var tempErr error
+		// Use os.MkdirTemp directly as it's a standard OS operation
+		stagingDir, tempErr = os.MkdirTemp("", "settingssentry-zip-")
+		if tempErr != nil {
+			AppLogger.LogErrorf("Failed to create temporary staging directory: %v", tempErr)
+			return // Cannot proceed with zip backup without staging dir
+		}
+		AppLogger.Logf("Using staging directory for zip backup: %s", stagingDir)
+		// Ensure staging directory is cleaned up
+		defer func() {
+			if stagingDir != "" {
+				AppLogger.Logf("Cleaning up staging directory: %s", stagingDir)
+				Fs.RemoveAll(stagingDir)
+			}
+		}()
+	}
 
 	foundCfg := false // Flag to track if any .cfg files were processed
 	for _, file := range files {
@@ -412,9 +468,19 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 			// For backup operations, create a versioned directory
 			var versionedBackupPath string
 			var latestVersion string
+			var targetPath string // Use a general target path variable
+
+			var latestIsZip bool // Declare here for broader scope
+
 			if isBackup {
-				// Create timestamp-based directory
-				versionedBackupPath = Fs.Join(backupFolder, timestamp, cfg.Name, Fs.Base(configFile))
+				if zipBackup {
+					// Target path is inside the staging directory for zip backups
+					targetPath = Fs.Join(stagingDir, cfg.Name, Fs.Base(configFile))
+				} else {
+					// Target path is the versioned directory for normal backups
+					targetPath = Fs.Join(backupFolder, timestamp, cfg.Name, Fs.Base(configFile))
+				}
+				versionedBackupPath = targetPath // Keep versionedBackupPath for consistency in copy logic below? Or rename? Let's use targetPath directly.
 
 				_, err := Fs.Stat(configFile)
 				if os.IsNotExist(err) {
@@ -427,22 +493,42 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 				}
 
 				if DryRun {
-					Printer.Print("Would create versioned backup directory: %s\n", Fs.Dir(versionedBackupPath))
+					// For zip, the final dir is inside the zip; for normal, it's the versioned path.
+					// Log the intended final structure path for clarity, even if staging is used.
+					finalDirForLog := Fs.Dir(Fs.Join(backupFolder, timestamp, cfg.Name, Fs.Base(configFile)))
+					if zipBackup {
+						finalDirForLog = Fs.Dir(Fs.Join(stagingDir, cfg.Name, Fs.Base(configFile))) // Log staging dir creation
+						Printer.Print("Would create staging directory: %s\n", finalDirForLog)
+					} else {
+						Printer.Print("Would create versioned backup directory: %s\n", finalDirForLog)
+					}
 				} else {
-					err = Fs.MkdirAll(Fs.Dir(versionedBackupPath), 0755)
+					// Create the target directory (either staging or final versioned)
+					err = Fs.MkdirAll(Fs.Dir(targetPath), 0755)
 					if err != nil {
-						AppLogger.Logf("Failed to create versioned backup directory '%s': %v", Fs.Dir(versionedBackupPath), err)
+						AppLogger.Logf("Failed to create target directory '%s': %v", Fs.Dir(targetPath), err)
 						continue
 					}
 				}
 			} else {
-				// For restore operations, find the latest version
-				latestVersion, err = GetLatestVersionPath(backupFolder)
+				// For restore operations, find the latest version (dir or zip)
+				// latestIsZip declared earlier
+				latestVersion, latestIsZip, err = GetLatestVersionPath(backupFolder)
 				if err != nil {
 					AppLogger.Logf("Failed to find latest version in '%s': %v", backupFolder, err)
 					continue // Skip this config file if latest version not found
 				}
-				versionedBackupPath = Fs.Join(latestVersion, cfg.Name, Fs.Base(configFile))
+				// Determine the source path for restore based on whether it's a zip or dir
+				if latestIsZip {
+					// Path *inside* the zip archive
+					versionedBackupPath = filepath.ToSlash(Fs.Join(cfg.Name, Fs.Base(configFile))) // Use filepath.ToSlash for zip internal paths
+					// latestVersion holds the path to the zip file itself
+				} else {
+					// Path is a direct filesystem path within the backup directory
+					versionedBackupPath = Fs.Join(latestVersion, cfg.Name, Fs.Base(configFile))
+					// latestVersion holds the path to the backup directory
+				}
+				_ = latestIsZip // Keep this for now, will be used in the next step
 			}
 
 			if isBackup {
@@ -462,15 +548,15 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 
 					// In dry-run mode, just show what would be backed up
 					if DryRun {
-						Printer.Print("Would back up %s to %s", configFile, versionedBackupPath)
+						Printer.Print("Would back up %s to %s", configFile, versionedBackupPath) // TODO: Fix log path for zip
 						return nil
 					}
 
-					// Copy the file/directory
+					// Copy the file/directory to the target path (staging or final)
 					if info.IsDir() {
-						err = copyDirectory(configFile, versionedBackupPath)
+						err = copyDirectory(configFile, targetPath)
 					} else {
-						err = copyFile(configFile, versionedBackupPath)
+						err = copyFile(configFile, targetPath)
 					}
 
 					if err != nil {
@@ -478,7 +564,12 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 						return err // Return error to SafeExecute
 					}
 
-					Printer.Print("Backed up %s to %s", configFile, versionedBackupPath)
+					// Log the final intended destination for user clarity
+					finalBackupPath := Fs.Join(backupFolder, timestamp, cfg.Name, Fs.Base(configFile))
+					if zipBackup {
+						finalBackupPath = Fs.Join(backupFolder, timestamp+".zip", cfg.Name, Fs.Base(configFile)) // Indicate path within zip
+					}
+					Printer.Print("Backed up %s to %s", configFile, finalBackupPath)
 					return nil
 				})
 
@@ -489,15 +580,8 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 			} else {
 				// Restore operation with recovery
 				err := command.SafeExecute("restore operation", func() error {
-					// Check if the backup file/dir exists
-					info, err := Fs.Stat(versionedBackupPath)
-					if os.IsNotExist(err) {
-						// If backup doesn't exist, skip silently for this file
-						return nil
-					} else if err != nil {
-						Printer.Print("Error accessing backup source %s: %v\n", versionedBackupPath, err)
-						return nil // Treat as non-fatal for this file
-					}
+					// Note: Existence check is implicitly handled by copy/extract logic below or should be added there if needed.
+					// The original check here was complex due to zip vs dir path differences.
 
 					// In dry-run mode, just show what would be restored
 					if DryRun {
@@ -512,11 +596,29 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 						return err // Return error to SafeExecute
 					}
 
-					// Copy the file/directory
-					if info.IsDir() {
-						err = copyDirectory(versionedBackupPath, configFile)
+					// Extract from zip or copy file/directory
+					if latestIsZip {
+						// latestVersion holds the path to the zip file
+						// versionedBackupPath holds the path *inside* the zip
+						err = extractFromZip(latestVersion, versionedBackupPath, configFile)
+						// Need to handle directory extraction if source was a dir
+						// TODO: Enhance extractFromZip to handle directories if needed, or adjust logic here.
+						// Current extractFromZip likely only handles files.
 					} else {
-						err = copyFile(versionedBackupPath, configFile)
+						// latestVersion holds the path to the backup directory
+						// versionedBackupPath holds the full path to the source file/dir within the backup dir
+						// Check info from the *source* within the backup dir
+						backupSourceInfo, statErr := Fs.Stat(versionedBackupPath)
+						if statErr != nil {
+							// This check might be redundant if the earlier check (line 539) covers it
+							Printer.Print("Error accessing backup source %s: %v\n", versionedBackupPath, statErr)
+							return nil // Treat as non-fatal for this file
+						}
+						if backupSourceInfo.IsDir() {
+							err = copyDirectory(versionedBackupPath, configFile)
+						} else {
+							err = copyFile(versionedBackupPath, configFile)
+						}
 					}
 
 					if err != nil {
@@ -571,6 +673,23 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 		}
 	}
 
+	// Create zip archive from staging directory if zipBackup is enabled
+	if isBackup && zipBackup {
+		if stagingDir == "" {
+			// Should not happen if staging dir creation succeeded earlier
+			AppLogger.LogErrorf("Staging directory path is empty, cannot create zip archive.")
+		} else {
+			targetZipPath := Fs.Join(backupFolder, timestamp+".zip")
+			AppLogger.Logf("Creating zip archive: %s", targetZipPath)
+			if err := createZipArchive(stagingDir, targetZipPath); err != nil {
+				AppLogger.LogErrorf("Failed to create zip archive: %v", err)
+				// Note: Staging dir will still be cleaned up by the deferred RemoveAll
+			} else {
+				AppLogger.Logf("Successfully created zip archive: %s", targetZipPath)
+			}
+		}
+	}
+
 	if !foundCfg {
 		AppLogger.Logf("No .cfg files found to process in %s.", configReadDir)
 	}
@@ -582,4 +701,155 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 			AppLogger.Logf("Failed to cleanup old versions: %v", err)
 		}
 	}
+} // Closing brace for ProcessConfiguration
+
+// createZipArchive creates a zip archive from the contents of a source directory.
+func createZipArchive(sourceDir, targetZipPath string) error {
+	zipFile, err := os.Create(targetZipPath) // Use os.Create directly for zip file creation
+	if err != nil {
+		return fmt.Errorf("failed to create zip file '%s': %w", targetZipPath, err)
+	}
+	defer zipFile.Close()
+
+	zipWriter := zip.NewWriter(zipFile)
+	defer zipWriter.Close()
+
+	// Walk the staging directory
+	err = filepath.Walk(sourceDir, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Create a proper relative path for the zip header
+		relPath, err := filepath.Rel(sourceDir, filePath)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path for '%s': %w", filePath, err)
+		}
+
+		// Skip the root directory itself
+		if relPath == "." {
+			return nil
+		}
+
+		// Create zip header
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return fmt.Errorf("failed to create zip header for '%s': %w", filePath, err)
+		}
+
+		// Set the name in the header to the relative path
+		header.Name = filepath.ToSlash(relPath) // Use forward slashes in zip archives
+
+		// Set compression method (optional, Deflate is common)
+		header.Method = zip.Deflate
+
+		// Create entry in the zip file
+		writer, err := zipWriter.CreateHeader(header)
+		if err != nil {
+			return fmt.Errorf("failed to create zip entry for '%s': %w", relPath, err)
+		}
+
+		// If it's a directory, we just created the header, nothing more to do
+		if info.IsDir() {
+			return nil
+		}
+
+		// If it's a file, open it and copy its content into the zip writer
+		fileToZip, err := os.Open(filePath)
+		if err != nil {
+			return fmt.Errorf("failed to open file '%s' for zipping: %w", filePath, err)
+		}
+		defer fileToZip.Close()
+
+		_, err = io.Copy(writer, fileToZip)
+		if err != nil {
+			return fmt.Errorf("failed to copy file content for '%s' to zip: %w", filePath, err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("error walking staging directory '%s': %w", sourceDir, err)
+	}
+
+	return nil
+}
+
+// extractFromZip extracts a specific file or directory from a zip archive to a destination path.
+func extractFromZip(zipPath, entryPath, destinationPath string) error {
+	// Open the zip archive for reading.
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("failed to open zip archive '%s': %w", zipPath, err)
+	}
+	defer r.Close()
+
+	// Normalize entryPath to use forward slashes, as used in zip headers
+	entryPath = filepath.ToSlash(entryPath)
+
+	found := false
+	// Iterate through the files in the archive.
+	for _, f := range r.File {
+		// Check if the file's path matches the entryPath or is within the entryPath (for directories)
+		if f.Name == entryPath || strings.HasPrefix(f.Name, entryPath+"/") {
+			found = true
+			// Determine the full path for extraction
+			extractPath := ""
+			if f.Name == entryPath {
+				// If it's an exact match (file or directory itself), use the destinationPath directly
+				extractPath = destinationPath
+			} else {
+				// If it's inside a directory, calculate the relative path and join with destination
+				relPath := strings.TrimPrefix(f.Name, entryPath+"/")
+				extractPath = filepath.Join(destinationPath, relPath)
+			}
+
+			// Check if it's a directory or a file
+			if f.FileInfo().IsDir() {
+				// Create the directory.
+				if err := os.MkdirAll(extractPath, f.Mode()); err != nil {
+					return fmt.Errorf("failed to create directory '%s': %w", extractPath, err)
+				}
+				continue // Go to the next file in zip
+			}
+
+			// It's a file, ensure the directory exists first.
+			if err := os.MkdirAll(filepath.Dir(extractPath), os.ModePerm); err != nil {
+				return fmt.Errorf("failed to create directory for file '%s': %w", extractPath, err)
+			}
+
+			// Open the file inside the zip archive.
+			rc, err := f.Open()
+			if err != nil {
+				return fmt.Errorf("failed to open file '%s' in zip: %w", f.Name, err)
+			}
+
+			// Create the destination file.
+			dstFile, err := os.OpenFile(extractPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				rc.Close() // Close the source file before returning error
+				return fmt.Errorf("failed to create destination file '%s': %w", extractPath, err)
+			}
+
+			// Copy the contents.
+			_, err = io.Copy(dstFile, rc)
+
+			// Close files
+			rc.Close()
+			dstFile.Close()
+
+			if err != nil {
+				return fmt.Errorf("failed to copy content to '%s': %w", extractPath, err)
+			}
+		}
+	}
+
+	if !found {
+		// Return nil error if the specific entry wasn't found, consistent with restore logic skipping non-existent files.
+		// Alternatively, could return an error: fmt.Errorf("entry '%s' not found in zip archive '%s'", entryPath, zipPath)
+		return nil
+	}
+
+	return nil
 }

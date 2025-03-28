@@ -18,7 +18,14 @@ help:
 	@echo "  make help             - Show this help message"
 
 build:
-	go build ${LDFLAGS} -o ${BINARY_NAME} .
+	@echo "Temporarily renaming TestCommand.cfg..."
+	@mv configs/TestCommand.cfg configs/TestCommand.not_embed || true
+	@echo "Building..."
+	@go build ${LDFLAGS} -o ${BINARY_NAME} . ; \
+	EXIT_CODE=$$? ; \
+	echo "Renaming TestCommand.cfg back..." ; \
+	mv configs/TestCommand.not_embed configs/TestCommand.cfg || true ; \
+	exit $$EXIT_CODE
 
 test:
 	go test -v -race ./...

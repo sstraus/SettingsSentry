@@ -221,7 +221,7 @@ func TestGetLatestVersionPath(t *testing.T) {
 		t.Fatalf("Failed to create directory: %v", err)
 	}
 
-	_, err := GetLatestVersionPath(baseBackupPath)
+	_, _, err := GetLatestVersionPath(baseBackupPath) // Capture all 3 return values
 	if err == nil {
 		t.Error("Expected error when no versions exist, but got nil")
 	}
@@ -245,7 +245,7 @@ func TestGetLatestVersionPath(t *testing.T) {
 		t.Fatalf("Failed to create directory: %v", err)
 	}
 
-	latestPath, err := GetLatestVersionPath(baseBackupPath)
+	latestPath, _, err := GetLatestVersionPath(baseBackupPath) // Capture all 3, ignore isZip
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}

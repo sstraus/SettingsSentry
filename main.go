@@ -90,6 +90,7 @@ func main() {
 	envAppName := os.Getenv("SETTINGSSENTRY_APP")
 	envCommands := os.Getenv("SETTINGSSENTRY_COMMANDS") == "true"
 	envDryRun := os.Getenv("SETTINGSSENTRY_DRY_RUN") == "true"
+	envZip := os.Getenv("SETTINGSSENTRY_ZIP") == "true"
 
 	// Define shared command-line flags with environment variable defaults
 	configFolder := flag.String("config", envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
@@ -98,6 +99,8 @@ func main() {
 	commands := flag.Bool("commands", envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
 	dryRunFlag := flag.Bool("dry-run", envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
 	versionsToKeep := flag.Int("versions", 1, "Number of backup versions to keep")
+
+	zipFlag := flag.Bool("zip", envZip, "Optional: Create backup as a zip archive instead of a directory (env: SETTINGSSENTRY_ZIP)")
 
 	// Define a function to display help information
 	showHelp := func() {
@@ -157,9 +160,11 @@ func main() {
 
 	switch action {
 	case "backup":
-		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, true, *commands, *versionsToKeep)
+		// Pass the zip flag value to ProcessConfiguration
+		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, true, *commands, *versionsToKeep, *zipFlag)
 	case "restore":
-		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, false, *commands, *versionsToKeep)
+		// Pass false for zipBackup during restore, as it's determined by the found backup
+		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, false, *commands, *versionsToKeep, false)
 	case "configsinit":
 		err := util.ExtractEmbeddedConfigs(embeddedConfigsFiles)
 		if err != nil {
