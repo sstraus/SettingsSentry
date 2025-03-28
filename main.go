@@ -23,7 +23,7 @@ import (
 var embeddedConfigsFiles embed.FS
 
 var (
-	Version = "1.1.5"
+	Version = "1.1.6"
 )
 
 // Global dependencies
