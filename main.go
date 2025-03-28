@@ -23,6 +23,8 @@ var embeddedConfigsFiles embed.FS
 
 var (
 	appLogger *logger.Logger = &logger.Logger{}
+	// Version is the application version, typically set via build flags.
+	Version string = "1.1.7"
 )
 
 func main() {
@@ -50,15 +52,14 @@ func main() {
 		}
 	}()
 
-	Version := "1.1.5"
-	appLogger.Logf("SettingsSentry v%s", Version)
+	appLogger.Logf("SettingsSentry v%s", Version) // Use package-level Version
 
 	// Initialize dependencies
 	osFs := interfaces.NewOsFileSystem()
 	osCmdExecutor := interfaces.NewOsCommandExecutor()
 
 	// Initialize globals in util package and dependent packages
-	util.InitGlobals(appLogger, osFs, osCmdExecutor, false, Version)
+	util.InitGlobals(appLogger, osFs, osCmdExecutor, false) // Removed Version argument
 
 	// Manually set dependencies in other packages
 	config.Fs = util.Fs

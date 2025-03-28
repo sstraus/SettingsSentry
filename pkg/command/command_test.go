@@ -1,19 +1,21 @@
 package command
 
 import (
-	"SettingsSentry/logger"
+	// Keep logger import if needed elsewhere, otherwise remove
 	"SettingsSentry/pkg/printer"
-	"SettingsSentry/pkg/util"
+	"SettingsSentry/pkg/testutil" // Added testutil
 	"errors"
 	"testing"
 )
 
 func setupTestDependencies() {
-	testLogger, _ := logger.NewLogger("")
+	// Use the shared helper, passing nil for FS and CmdExecutor as they aren't needed here
+	testLogger := testutil.SetupTestGlobals(nil, nil)
+
+	// Initialize package-specific dependencies
 	testPrinter := printer.NewPrinter("Test", testLogger)
-	util.InitGlobals(testLogger, nil, nil, false, "")
-	printer.AppLogger = testLogger
 	Printer = testPrinter
+	// printer.AppLogger is set via util.InitGlobals inside SetupTestGlobals
 }
 
 func TestSafeExecute(t *testing.T) {

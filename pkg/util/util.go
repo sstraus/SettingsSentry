@@ -14,7 +14,7 @@ var (
 	Fs          interfaces.FileSystem
 	CmdExecutor interfaces.CommandExecutor
 	DryRun      bool
-	Version     string = "1.1.5" // Default version, can be overridden by build flags
+	// Version removed, now defined in main package
 )
 
 func GetEnvWithDefault(key, defaultValue string) string {
@@ -37,15 +37,13 @@ func EmbeddedFallback(rootEmbedFS embed.FS) iofs.FS {
 	return fsys
 }
 
-func InitGlobals(logger *logger.Logger, fs interfaces.FileSystem, cmdExec interfaces.CommandExecutor, dryRun bool, version string) {
+// InitGlobals initializes global variables used across packages.
+// Version is no longer handled here; it's defined in the main package.
+func InitGlobals(logger *logger.Logger, fs interfaces.FileSystem, cmdExec interfaces.CommandExecutor, dryRun bool) {
 	AppLogger = logger
 	Fs = fs
 	CmdExecutor = cmdExec
 	DryRun = dryRun
-	// Allow overriding default version
-	if version != "" {
-		Version = version
-	}
 }
 
 func ExtractEmbeddedConfigs(rootEmbedFS embed.FS) error {

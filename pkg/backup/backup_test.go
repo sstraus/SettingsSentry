@@ -2,26 +2,32 @@ package backup
 
 import (
 	"SettingsSentry/interfaces"
-	"SettingsSentry/logger"
+	// "SettingsSentry/logger" // No longer needed directly
 	"SettingsSentry/pkg/config"
 	"SettingsSentry/pkg/printer"
-	"SettingsSentry/pkg/util"
+	"SettingsSentry/pkg/testutil" // Added testutil
+	"SettingsSentry/pkg/util"     // Keep util for Fs/AppLogger/DryRun access
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func setupBackupTestDependencies() {
-	testLogger, _ := logger.NewLogger("")
+	// Create the necessary FS implementation for this test context
 	testFs := interfaces.NewOsFileSystem()
-	testPrinter := printer.NewPrinter("Test", testLogger)
-	util.InitGlobals(testLogger, testFs, nil, false, "")
-	// Initialize Fs and AppLogger in both backup and config packages
+
+	// Use the shared helper, passing the OS FS and nil for CmdExecutor
+	testLogger := testutil.SetupTestGlobals(testFs, nil)
+
+	// Initialize package-specific dependencies using globals set by the helper
 	AppLogger = util.AppLogger
 	Fs = util.Fs
 	config.Fs = util.Fs               // Initialize config.Fs as well
 	config.AppLogger = util.AppLogger // Ensure config.AppLogger is also set
 	DryRun = util.DryRun
+
+	// Initialize printer specific to this package's tests
+	testPrinter := printer.NewPrinter("Test", testLogger)
 	Printer = testPrinter
 }
 

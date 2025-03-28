@@ -2,17 +2,22 @@ package config
 
 import (
 	"SettingsSentry/interfaces"
-	"SettingsSentry/logger"
-	"SettingsSentry/pkg/util"
+	// "SettingsSentry/logger" // No longer needed directly
+	"SettingsSentry/pkg/testutil" // Added testutil
+	"SettingsSentry/pkg/util"     // Keep util for Fs/AppLogger access
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func setupTestDependencies() {
-	testLogger, _ := logger.NewLogger("")
+	// Create the necessary FS implementation for this test context
 	testFs := interfaces.NewOsFileSystem()
-	util.InitGlobals(testLogger, testFs, nil, false, "")
+
+	// Use the shared helper, passing the OS FS and nil for CmdExecutor
+	_ = testutil.SetupTestGlobals(testFs, nil) // Logger is returned but not needed directly here
+
+	// Initialize package-specific dependencies using globals set by the helper
 	Fs = util.Fs
 	AppLogger = util.AppLogger
 }

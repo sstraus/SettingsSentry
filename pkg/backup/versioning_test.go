@@ -2,9 +2,10 @@ package backup
 
 import (
 	"SettingsSentry/interfaces"
-	"SettingsSentry/logger"
+	// "SettingsSentry/logger" // No longer needed directly
 	"SettingsSentry/pkg/printer"
-	"SettingsSentry/pkg/util"
+	"SettingsSentry/pkg/testutil" // Added testutil
+	"SettingsSentry/pkg/util"     // Keep util for Fs/AppLogger/DryRun access
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,15 +14,21 @@ import (
 )
 
 func setupVersioningTestDependencies() {
-	testLogger, _ := logger.NewLogger("")
+	// Create the mock FS specific to these tests
 	testFs := newMockVersionFileSystem()
-	testPrinter := printer.NewPrinter("Test", testLogger)
-	util.InitGlobals(testLogger, testFs, nil, false, "")
-	printer.AppLogger = testLogger
+
+	// Use the shared helper, passing the mock FS and nil for CmdExecutor
+	testLogger := testutil.SetupTestGlobals(testFs, nil)
+
+	// Initialize package-specific dependencies using globals set by the helper
 	AppLogger = util.AppLogger
-	Fs = util.Fs
+	Fs = util.Fs // Fs is now the mock FS
 	DryRun = util.DryRun
+
+	// Initialize printer specific to this package's tests
+	testPrinter := printer.NewPrinter("Test", testLogger)
 	Printer = testPrinter
+	// printer.AppLogger is set via util.InitGlobals inside SetupTestGlobals
 }
 
 type mockVersionFileSystem struct {
