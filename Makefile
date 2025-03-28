@@ -1,6 +1,6 @@
 .PHONY: build test lint clean release help dmg zip coverage integration-test
 
-BINARY_NAME=SettingsSentry
+BINARY_NAME=settingssentry
 VERSION=$(shell git describe --tags --always --dirty)
 LDFLAGS=-ldflags "-X main.Version=${VERSION}"
 
