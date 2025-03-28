@@ -5,10 +5,12 @@ import (
 	"SettingsSentry/interfaces"
 	"SettingsSentry/logger"
 	"bufio"
+	"embed"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	iofs "io/fs" // Import the standard io/fs package with an alias
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -16,6 +18,9 @@ import (
 	"strings"
 	"time"
 )
+
+//go:embed configs/*.cfg
+var embeddedConfigsFiles embed.FS
 
 var (
 	Version = "1.1.5"
@@ -179,13 +184,14 @@ func validateConfig(config Config) error {
 }
 
 // parseConfig reads and parses the content of a .cfg file into a Config struct.
-func parseConfig(filePath string) (Config, error) {
+// Accepts an iofs.FS to allow reading from OS or embedded filesystems.
+func parseConfig(filesystem iofs.FS, filePath string) (Config, error) {
 	var config Config
 
-	// Read the file
-	data, err := fs.ReadFile(filePath)
+	// Read the file from the provided filesystem
+	data, err := iofs.ReadFile(filesystem, filePath)
 	if err != nil {
-		return config, appLogger.LogErrorf("failed to read config file: %w", err)
+		return config, appLogger.LogErrorf("failed to read config file '%s': %w", filePath, err)
 	}
 
 	// Create a scanner to read the file line by line
@@ -506,6 +512,20 @@ func safeExecute(operation string, fn func() error) error {
 	return fn()
 }
 
+// embeddedFallback returns an iofs.FS for the embedded 'configs' directory.
+// It uses the standard 'io/fs' package.
+func embeddedFallback() iofs.FS {
+	// Return embedded subdirectory only
+	fsys, err := iofs.Sub(embeddedConfigsFiles, "configs")
+	if err != nil {
+		// Log the error but still return the root embed FS as a last resort.
+		// This might happen if the "configs" directory doesn't exist in the embed.
+		appLogger.Logf("Failed to access embedded 'configs' subdirectory: %v. Falling back to root embed FS.", err)
+		return embeddedConfigsFiles
+	}
+	return fsys
+}
+
 // processConfiguration processes configuration files for backup or restore.
 func processConfiguration(configFolder, backupFolder, appName string, isBackup bool, commands bool, versionsToKeep int) {
 	// Expand environment variables in paths
@@ -522,37 +542,62 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 		configFolder = fs.Join(fs.Dir(exePath), configFolder) // Append to the executable directory
 	}
 
-	// Validate the config folder exists
+	var currentFS iofs.FS     // Filesystem to use (OS or embedded)
+	var files []iofs.DirEntry // Directory entries from iofs.ReadDir
+	var configReadDir string  // Directory path/source used for ReadDir (for logging)
+
+	// Validate the config folder exists using the OS filesystem interface
 	_, err := fs.Stat(configFolder)
 	if err != nil {
-		appLogger.Logf("Config folder does not exist or is not accessible: %v", err)
-		return
+		// Config folder doesn't exist or isn't accessible via OS fs, try embedded
+		appLogger.Logf("Config folder '%s' not found or inaccessible: %v. Attempting to use embedded configs.", configFolder, err)
+		currentFS = embeddedFallback() // Use embedded FS
+		configReadDir = "embedded configs"
+		// Read directory entries from the root of the embedded FS
+		files, err = iofs.ReadDir(currentFS, ".") // Use iofs.ReadDir
+		if err != nil {
+			appLogger.Logf("Error reading embedded config directory: %v", err)
+			return // Cannot proceed if embedded FS is unreadable
+		}
+		if len(files) == 0 {
+			appLogger.Logf("No embedded configuration files found.")
+			return
+		}
+	} else {
+		// Config folder exists, use the OS filesystem
+		appLogger.Logf("Using config folder: %s", configFolder)
+		currentFS = os.DirFS(configFolder) // Create an iofs.FS from the OS path
+		configReadDir = configFolder
+		// Read directory entries from the OS filesystem folder using iofs.ReadDir
+		files, err = iofs.ReadDir(currentFS, ".") // Use iofs.ReadDir
+		if err != nil {
+			appLogger.Logf("Error reading config folder '%s': %v", configFolder, err)
+			return // Cannot proceed if OS folder is unreadable
+		}
+		if len(files) == 0 {
+			appLogger.Logf("No configuration files found in '%s'.", configFolder)
+			return
+		}
 	}
 
-	// Validate the backup folder exists or create it
+	// Validate the backup folder exists or create it (using OS fs)
 	if isBackup {
 		if dryRun {
 			appLogger.Logf("Would create backup folder: %s", backupFolder)
 		} else {
-			err = fs.MkdirAll(backupFolder, 0755)
+			err = fs.MkdirAll(backupFolder, 0755) // Use global fs for OS operation
 			if err != nil {
 				appLogger.Logf("Failed to create backup folder: %v", err)
 				return
 			}
 		}
 	} else {
-		// For restore, the backup folder must exist
-		_, err := fs.Stat(backupFolder)
+		// For restore, the backup folder must exist (check using OS fs)
+		_, err := fs.Stat(backupFolder) // Use global fs for OS operation
 		if err != nil {
 			appLogger.Logf("Backup folder does not exist or is not accessible: %v", err)
 			return
 		}
-	}
-
-	files, err := fs.ReadDir(configFolder)
-	if err != nil {
-		appLogger.Logf("Error reading config folder: %v", err)
-		return
 	}
 
 	homeDir, err := getHomeDirectory()
@@ -564,20 +609,25 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 	// Create timestamp here to avoid different paths during the backup
 	timestamp := time.Now().Format("20060102-150405")
 
+	foundCfg := false // Flag to track if any .cfg files were processed
 	for _, file := range files {
+		// Skip directories and non-cfg files
 		if file.IsDir() || !strings.HasSuffix(file.Name(), ".cfg") {
 			continue
 		}
+
+		foundCfg = true // Found at least one .cfg file
 
 		// If an app name is specified, only process that app's configuration
 		if appName != "" && !strings.Contains(strings.ToLower(file.Name()), strings.ToLower(appName)) {
 			continue
 		}
 
-		// Parse the configuration file
-		config, err := parseConfig(fs.Join(configFolder, file.Name()))
+		// Parse the configuration file using the determined filesystem (currentFS)
+		// file.Name() is relative to the directory read by iofs.ReadDir
+		config, err := parseConfig(currentFS, file.Name()) // Pass currentFS and relative path
 		if err != nil {
-			appLogger.Logf("Error parsing configuration file %s: %v", file.Name(), err)
+			appLogger.Logf("Error parsing configuration file %s from %s: %v", file.Name(), configReadDir, err)
 			continue
 		}
 
@@ -812,6 +862,11 @@ func processConfiguration(configFolder, backupFolder, appName string, isBackup b
 			}
 		}
 	}
+
+	if !foundCfg {
+		appLogger.Logf("No .cfg files found to process in %s.", configReadDir)
+	}
+
 	// Cleanup old versions if needed
 	if isBackup && versionsToKeep > 0 {
 		if dryRun {
@@ -862,6 +917,73 @@ func getEnvWithDefault(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// extractEmbeddedConfigs extracts the embedded config files to a 'configs' directory
+// next to the executable.
+func extractEmbeddedConfigs() error {
+	exePath, err := os.Executable()
+	if err != nil {
+		return appLogger.LogErrorf("failed to get executable path: %w", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	targetDir := filepath.Join(exeDir, "configs")
+
+	appLogger.Logf("Extracting embedded configs to: %s", targetDir)
+
+	// Check if target directory already exists
+	if _, err := os.Stat(targetDir); !os.IsNotExist(err) {
+		// Directory exists, check if it's empty or ask user? For now, log and continue.
+		// Potentially add a flag to force overwrite later if needed.
+		appLogger.Logf("Target directory '%s' already exists. Files might be overwritten.", targetDir)
+	} else {
+		// Create the target directory if it doesn't exist
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			return appLogger.LogErrorf("failed to create target directory '%s': %w", targetDir, err)
+		}
+	}
+
+	// Access the embedded FS (already points to configs/*.cfg)
+	embedFS := embeddedFallback() // Use the existing function to get the correct iofs.FS
+
+	// Walk the embedded directory
+	err = iofs.WalkDir(embedFS, ".", func(path string, d iofs.DirEntry, err error) error {
+		if err != nil {
+			return appLogger.LogErrorf("error accessing path %s in embed FS: %w", path, err)
+		}
+		// Skip the root directory itself
+		if path == "." {
+			return nil
+		}
+		// Skip any subdirectories (shouldn't be any with configs/*.cfg, but good practice)
+		if d.IsDir() {
+			return nil
+		}
+
+		// Construct destination path
+		destPath := filepath.Join(targetDir, path)
+
+		// Read embedded file content
+		content, readErr := iofs.ReadFile(embedFS, path)
+		if readErr != nil {
+			return appLogger.LogErrorf("failed to read embedded file '%s': %w", path, readErr)
+		}
+
+		// Write file to destination
+		writeErr := os.WriteFile(destPath, content, 0644) // Use default permissions
+		if writeErr != nil {
+			return appLogger.LogErrorf("failed to write file '%s': %w", destPath, writeErr)
+		}
+		appLogger.Logf("  Extracted: %s", destPath)
+		return nil
+	})
+
+	if err != nil {
+		return err // Return the error from WalkDir
+	}
+
+	appLogger.Logf("Configs extracted successfully.")
+	return nil
 }
 
 func main() {
@@ -924,6 +1046,7 @@ func main() {
 		appLogger.Logf("  restore  - Restore the files to their original locations")
 		appLogger.Logf("  install  - Install the application as a CRON job that runs at every reboot (you can also provide a valid cron expression as parameter)")
 		appLogger.Logf("  remove   - Remove the previously installed CRON job")
+		appLogger.Logf("  configsinit - Extract embedded default configs to a 'configs' directory next to the executable")
 		appLogger.Logf("Use -logfile=<path> to enable logging to a file. This will write logs to the specified file in addition to console output.")
 		appLogger.Logf("If -logfile is not provided, logs will only be written to the console.")
 		appLogger.Logf("Default values:")
@@ -975,6 +1098,12 @@ func main() {
 		processConfiguration(*configFolder, *backupFolder, *appName, true, *commands, *versionsToKeep)
 	case "restore":
 		processConfiguration(*configFolder, *backupFolder, *appName, false, *commands, *versionsToKeep)
+	case "configsinit":
+		err := extractEmbeddedConfigs()
+		if err != nil {
+			appLogger.Logf("Error extracting embedded configs: %v", err)
+			os.Exit(1)
+		}
 	case "install":
 		// Check if a cron expression is provided
 		cronExpression := ""

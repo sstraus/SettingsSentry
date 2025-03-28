@@ -65,7 +65,10 @@ test restore command
 	}
 
 	// Test parsing the config
-	config, err := parseConfig(configPath)
+	// Create an iofs.FS rooted at the temp directory
+	testFS := os.DirFS(tempDir)
+	// Pass the FS and the relative path within the FS
+	config, err := parseConfig(testFS, filepath.Base(configPath))
 	if err != nil {
 		t.Errorf("parseConfig() returned an error: %v", err)
 	}
@@ -93,7 +96,8 @@ func TestParseConfigWithMissingFile(t *testing.T) {
 	}
 	fs = interfaces.NewOsFileSystem()
 	// Test parsing a non-existent config file
-	_, err = parseConfig("/nonexistent/file.cfg")
+	// Provide the root FS and the path relative to root
+	_, err = parseConfig(os.DirFS("/"), "nonexistent/file.cfg")
 	if err == nil {
 		t.Errorf("parseConfig() did not return an error for a non-existent file")
 	}

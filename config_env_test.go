@@ -2,6 +2,9 @@ package main
 
 import (
 	"SettingsSentry/interfaces"
+	"fmt"
+	"io"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -154,7 +157,10 @@ ${TEST_CONFIG_FILE}
 	}
 
 	// Test parsing the config
-	config, err := parseConfig(configPath)
+	// Create adapter instance (definition moved to top level)
+	adapterInstance := &mockFSAdapter{mock: fs.(*mockFileSystem)}
+	// Pass the adapter instance to parseConfig
+	config, err := parseConfig(adapterInstance, configPath)
 	if err != nil {
 		t.Errorf("parseConfig() returned an error: %v", err)
 	}
@@ -175,6 +181,35 @@ ${TEST_CONFIG_FILE}
 type mockFileSystem struct {
 	readFileFunc func(filename string) ([]byte, error)
 	statFunc     func(path string) (os.FileInfo, error)
+	// Add other funcs as needed for iofs.FS if parseConfig uses more methods
+}
+
+// Add mockIOFSFile to satisfy iofs.File interface
+type mockIOFSFile struct {
+	content []byte
+	offset  int64
+	info    os.FileInfo // Can be nil if not needed/mocked
+}
+
+func (f *mockIOFSFile) Read(p []byte) (int, error) {
+	if f.offset >= int64(len(f.content)) {
+		return 0, io.EOF
+	}
+	n := copy(p, f.content[f.offset:])
+	f.offset += int64(n)
+	return n, nil
+}
+
+func (f *mockIOFSFile) Close() error {
+	return nil // No-op for mock
+}
+
+func (f *mockIOFSFile) Stat() (os.FileInfo, error) {
+	if f.info == nil {
+		// Return a default or error if Stat is crucial and not mocked
+		return nil, fmt.Errorf("mock Stat not implemented")
+	}
+	return f.info, nil
 }
 
 // Abs implements interfaces.FileSystem.
@@ -220,8 +255,23 @@ func (m *mockFileSystem) Create(name string) (interfaces.File, error) {
 	return nil, nil
 }
 
+// OpenIOFS provides an iofs.File compatible method (used by adapter)
+func (m *mockFileSystem) OpenIOFS(name string) (iofs.File, error) {
+	// Use readFileFunc to get content for the mock file
+	content, err := m.ReadFile(name)
+	if err != nil {
+		return nil, err // Propagate error like os.ErrNotExist
+	}
+	// Use statFunc to get FileInfo for the mock file's Stat method
+	info, _ := m.Stat(name) // Ignore error for simplicity in mock
+
+	return &mockIOFSFile{content: content, info: info}, nil
+}
+
+// Open implements interfaces.FileSystem.Open (needed for assignment to global fs)
 func (m *mockFileSystem) Open(name string) (interfaces.File, error) {
-	return nil, nil
+	// Simple implementation, as it won't be called by parseConfig in this test
+	return nil, fmt.Errorf("mock Open (interfaces.File) not implemented/needed for this test")
 }
 
 func (m *mockFileSystem) ReadDir(dirname string) ([]os.DirEntry, error) {
@@ -231,3 +281,16 @@ func (m *mockFileSystem) ReadDir(dirname string) ([]os.DirEntry, error) {
 func (m *mockFileSystem) EvalSymlinks(path string) (string, error) {
 	return path, nil
 }
+
+// mockFSAdapter wraps mockFileSystem to implement iofs.FS
+type mockFSAdapter struct {
+	mock *mockFileSystem
+}
+
+// Open implements iofs.FS for the adapter
+func (a *mockFSAdapter) Open(name string) (iofs.File, error) {
+	return a.mock.OpenIOFS(name) // Call the specific method on the embedded mock
+}
+
+// Ensure the adapter satisfies the iofs.FS interface
+var _ iofs.FS = (*mockFSAdapter)(nil)

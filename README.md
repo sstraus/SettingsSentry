@@ -28,6 +28,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - install: Install the application as a CRON job that runs at every reboot.
     You can also provide a valid cron expression as a parameter to customize the schedule (0 9 \* \* \*). Use [cronhub](https://crontab.cronhub.io) to generate a valid one.
 - remove: Remove the previously installed CRON job.
+- configsinit: Extract embedded default configurations to a 'configs' directory located next to the executable. This allows for customization of the configurations and provides a way to view the default settings.
 
 ### Default Values
 
@@ -57,7 +58,7 @@ SettingsSentry supports the following environment variables:
 - `SETTINGSSENTRY_CONFIG`: Path to the configuration folder.
 - `SETTINGSSENTRY_BACKUP`: Path to the backup folder.
 - `SETTINGSSENTRY_APP`: Optional name of the application to process.
-- `SETTINGSSENTRY_COMMANDS`: Set to 'true' to prevent command execution during backup or restore.
+- `SETTINGSSENTRY_COMMANDS`: Set to 'true' to perform command execution during backup or restore.
 - `SETTINGSSENTRY_DRY_RUN`: Set to 'true' to perform a dry run without making any changes.
 
 ### Configuration Files
@@ -128,6 +129,7 @@ To use dry-run mode, add the `--dry-run` flag to your command:
 ## License
 
 This project is licensed under the MIT License.
+(C) 2025 Stefano Straus
 
 ## Acknowledgments
 

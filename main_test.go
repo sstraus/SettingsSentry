@@ -67,7 +67,10 @@ test restore command
 	}
 
 	// Test parsing the config
-	config, err := parseConfig(configPath)
+	// Create an iofs.FS rooted at the temp directory
+	testFS := os.DirFS(tempDir)
+	// Pass the FS and the relative path within the FS
+	config, err := parseConfig(testFS, filepath.Base(configPath))
 	if err != nil {
 		t.Errorf("parseConfig() returned an error: %v", err)
 	}

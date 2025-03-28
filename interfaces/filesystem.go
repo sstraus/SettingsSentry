@@ -17,7 +17,7 @@ type FileSystem interface {
 	Stat(name string) (os.FileInfo, error)
 	ReadFile(filename string) ([]byte, error)
 	WriteFile(filename string, data []byte, perm os.FileMode) error
-	
+
 	// Path operations
 	Join(elem ...string) string
 	Dir(path string) string

@@ -12,3 +12,7 @@ todo.txt
 configs/TestCommand.cfg
 .aider*
 .ra-aid
+.roo
+.rooignore
+.roomodes
+.gitignore
