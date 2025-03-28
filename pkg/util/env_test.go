@@ -1,4 +1,4 @@
-package main
+package util
 
 import (
 	"os"
@@ -6,7 +6,6 @@ import (
 )
 
 func TestGetEnvWithDefault(t *testing.T) {
-	// Test cases
 	testCases := []struct {
 		name         string
 		key          string
@@ -53,7 +52,6 @@ func TestGetEnvWithDefault(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Set or unset the environment variable
 			if tc.envValue != "" {
 				os.Setenv(tc.key, tc.envValue)
 				defer os.Unsetenv(tc.key)
@@ -61,10 +59,8 @@ func TestGetEnvWithDefault(t *testing.T) {
 				os.Unsetenv(tc.key)
 			}
 
-			// Call the function
-			result := getEnvWithDefault(tc.key, tc.defaultValue)
+			result := GetEnvWithDefault(tc.key, tc.defaultValue)
 
-			// Check the result
 			if result != tc.expected {
 				t.Errorf("Expected '%s', got '%s'", tc.expected, result)
 			}

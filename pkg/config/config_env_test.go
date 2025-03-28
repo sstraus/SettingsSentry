@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"SettingsSentry/interfaces"
@@ -11,7 +11,8 @@ import (
 )
 
 func TestExpandEnvVars(t *testing.T) {
-	// Set up test environment variables
+	setupTestDependencies()
+
 	os.Setenv("TEST_VAR", "test_value")
 	os.Setenv("HOME_DIR", "/home/user")
 	defer os.Unsetenv("TEST_VAR")
@@ -30,14 +31,16 @@ func TestExpandEnvVars(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		result := expandEnvVars(tc.input)
+		result := ExpandEnvVars(tc.input)
 		if result != tc.expected {
-			t.Errorf("expandEnvVars(%q) = %q, expected %q", tc.input, result, tc.expected)
+			t.Errorf("ExpandEnvVars(%q) = %q, expected %q", tc.input, result, tc.expected)
 		}
 	}
 }
 
 func TestValidateConfig(t *testing.T) {
+	setupTestDependencies()
+
 	testCases := []struct {
 		name        string
 		config      Config
@@ -95,7 +98,7 @@ func TestValidateConfig(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateConfig(tc.config)
+			err := ValidateConfig(tc.config)
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got nil")
 			}
@@ -107,7 +110,8 @@ func TestValidateConfig(t *testing.T) {
 }
 
 func TestParseConfigWithEnvVars(t *testing.T) {
-	// Set up test environment variables
+	setupTestDependencies()
+
 	os.Setenv("TEST_APP_NAME", "EnvTestApp")
 	os.Setenv("TEST_CONFIG_FILE", ".env_testconfig")
 	os.Setenv("TEST_BACKUP_CMD", "echo env_backup")
@@ -115,7 +119,6 @@ func TestParseConfigWithEnvVars(t *testing.T) {
 	defer os.Unsetenv("TEST_CONFIG_FILE")
 	defer os.Unsetenv("TEST_BACKUP_CMD")
 
-	// Create a temporary config file
 	tempDir, err := os.MkdirTemp("", "settingssentry-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
@@ -140,32 +143,27 @@ ${TEST_CONFIG_FILE}
 		t.Fatalf("Failed to write test config file: %v", err)
 	}
 
-	// Mock the filesystem for testing
-	originalFs := fs
-	defer func() { fs = originalFs }()
-
-	fs = &mockFileSystem{
+	// Filesystem is now managed by setupTestDependencies and util.Fs
+	// We still need the mock definition for the adapter, but don't assign to global fs.
+	// The mock needs to read the actual temp file for env var expansion to work correctly.
+	mockFsImpl := &mockFileSystem{
 		readFileFunc: func(filename string) ([]byte, error) {
-			if filename == configPath {
-				return []byte(configContent), nil
-			}
-			return nil, os.ErrNotExist
+			// Read the actual temp file, not the static content string
+			return os.ReadFile(filename)
 		},
 		statFunc: func(path string) (os.FileInfo, error) {
-			return nil, nil
+			// Use os.Stat for the actual temp file/dir
+			return os.Stat(path)
 		},
 	}
 
-	// Test parsing the config
-	// Create adapter instance (definition moved to top level)
-	adapterInstance := &mockFSAdapter{mock: fs.(*mockFileSystem)}
-	// Pass the adapter instance to parseConfig
-	config, err := parseConfig(adapterInstance, configPath)
+	// Create adapter instance using the local mock implementation
+	adapterInstance := &mockFSAdapter{mock: mockFsImpl}
+	config, err := ParseConfig(adapterInstance, configPath)
 	if err != nil {
-		t.Errorf("parseConfig() returned an error: %v", err)
+		t.Errorf("ParseConfig() returned an error: %v", err)
 	}
 
-	// Verify the parsed config with environment variables expanded
 	if config.Name != "EnvTestApp" {
 		t.Errorf("Expected Name to be 'EnvTestApp', got '%s'", config.Name)
 	}
@@ -177,14 +175,11 @@ ${TEST_CONFIG_FILE}
 	}
 }
 
-// Simple mock filesystem for testing
 type mockFileSystem struct {
 	readFileFunc func(filename string) ([]byte, error)
 	statFunc     func(path string) (os.FileInfo, error)
-	// Add other funcs as needed for iofs.FS if parseConfig uses more methods
 }
 
-// Add mockIOFSFile to satisfy iofs.File interface
 type mockIOFSFile struct {
 	content []byte
 	offset  int64
@@ -201,7 +196,8 @@ func (f *mockIOFSFile) Read(p []byte) (int, error) {
 }
 
 func (f *mockIOFSFile) Close() error {
-	return nil // No-op for mock
+	// No-op for mock
+	return nil
 }
 
 func (f *mockIOFSFile) Stat() (os.FileInfo, error) {
@@ -212,17 +208,14 @@ func (f *mockIOFSFile) Stat() (os.FileInfo, error) {
 	return f.info, nil
 }
 
-// Abs implements interfaces.FileSystem.
 func (m *mockFileSystem) Abs(path string) (string, error) {
 	panic("unimplemented")
 }
 
-// RemoveAll implements interfaces.FileSystem.
 func (m *mockFileSystem) RemoveAll(path string) error {
 	panic("unimplemented")
 }
 
-// WriteFile implements interfaces.FileSystem.
 func (m *mockFileSystem) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	panic("unimplemented")
 }
@@ -255,12 +248,12 @@ func (m *mockFileSystem) Create(name string) (interfaces.File, error) {
 	return nil, nil
 }
 
-// OpenIOFS provides an iofs.File compatible method (used by adapter)
 func (m *mockFileSystem) OpenIOFS(name string) (iofs.File, error) {
 	// Use readFileFunc to get content for the mock file
 	content, err := m.ReadFile(name)
 	if err != nil {
-		return nil, err // Propagate error like os.ErrNotExist
+		// Propagate error like os.ErrNotExist
+		return nil, err
 	}
 	// Use statFunc to get FileInfo for the mock file's Stat method
 	info, _ := m.Stat(name) // Ignore error for simplicity in mock
@@ -282,15 +275,13 @@ func (m *mockFileSystem) EvalSymlinks(path string) (string, error) {
 	return path, nil
 }
 
-// mockFSAdapter wraps mockFileSystem to implement iofs.FS
 type mockFSAdapter struct {
 	mock *mockFileSystem
 }
 
-// Open implements iofs.FS for the adapter
 func (a *mockFSAdapter) Open(name string) (iofs.File, error) {
-	return a.mock.OpenIOFS(name) // Call the specific method on the embedded mock
+	// Call the specific method on the embedded mock
+	return a.mock.OpenIOFS(name)
 }
 
-// Ensure the adapter satisfies the iofs.FS interface
 var _ iofs.FS = (*mockFSAdapter)(nil)

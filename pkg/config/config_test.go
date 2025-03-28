@@ -1,15 +1,23 @@
-package main
+package config
 
 import (
 	"SettingsSentry/interfaces"
 	"SettingsSentry/logger"
+	"SettingsSentry/pkg/util"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
+func setupTestDependencies() {
+	testLogger, _ := logger.NewLogger("")
+	testFs := interfaces.NewOsFileSystem()
+	util.InitGlobals(testLogger, testFs, nil, false, "")
+	Fs = util.Fs
+	AppLogger = util.AppLogger
+}
+
 func TestConfig(t *testing.T) {
-	// Test creating a Config struct directly
 	config := Config{
 		Name:                "TestApp",
 		Files:               []string{".testconfig"},
@@ -19,7 +27,6 @@ func TestConfig(t *testing.T) {
 		PostRestoreCommands: []string{},
 	}
 
-	// Verify the Config struct
 	if config.Name != "TestApp" {
 		t.Errorf("Expected Name to be 'TestApp', got '%s'", config.Name)
 	}
@@ -35,7 +42,8 @@ func TestConfig(t *testing.T) {
 }
 
 func TestParseConfigWithComments(t *testing.T) {
-	// Create a temporary config file with comments
+	setupTestDependencies()
+
 	tempDir, err := os.MkdirTemp("", "settingssentry-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
@@ -64,16 +72,12 @@ test restore command
 		t.Fatalf("Failed to write test config file: %v", err)
 	}
 
-	// Test parsing the config
-	// Create an iofs.FS rooted at the temp directory
 	testFS := os.DirFS(tempDir)
-	// Pass the FS and the relative path within the FS
-	config, err := parseConfig(testFS, filepath.Base(configPath))
+	config, err := ParseConfig(testFS, filepath.Base(configPath))
 	if err != nil {
-		t.Errorf("parseConfig() returned an error: %v", err)
+		t.Errorf("ParseConfig() returned an error: %v", err)
 	}
 
-	// Verify the parsed config
 	if config.Name != "TestApp" {
 		t.Errorf("Expected Name to be 'TestApp', got '%s'", config.Name)
 	}
@@ -89,16 +93,10 @@ test restore command
 }
 
 func TestParseConfigWithMissingFile(t *testing.T) {
-	var err error
-	appLogger, err = logger.NewLogger("")
-	if err != nil {
-		t.Fatalf("failed to initialize logger: %v", err)
-	}
-	fs = interfaces.NewOsFileSystem()
-	// Test parsing a non-existent config file
-	// Provide the root FS and the path relative to root
-	_, err = parseConfig(os.DirFS("/"), "nonexistent/file.cfg")
+	setupTestDependencies()
+
+	_, err := ParseConfig(os.DirFS("/"), "nonexistent/file.cfg")
 	if err == nil {
-		t.Errorf("parseConfig() did not return an error for a non-existent file")
+		t.Errorf("ParseConfig() did not return an error for a non-existent file")
 	}
 }

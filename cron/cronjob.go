@@ -26,7 +26,6 @@ func safeExecute(operation string, fn func() error) error {
 // AddCronJob adds a new cron job for the current executable
 func AddCronJob(schedule *string, command string) error {
 	return safeExecute("AddCronJob", func() error {
-		// Define the cron job with the provided command
 		var job string
 		if schedule != nil && *schedule != "@reboot" {
 			_, err := cron.ParseStandard(*schedule)
@@ -36,7 +35,6 @@ func AddCronJob(schedule *string, command string) error {
 		}
 		job = fmt.Sprintf("%s %s %s", *schedule, command, comment)
 
-		// Get the existing crontab
 		cmd := exec.Command("crontab", "-l")
 		var out bytes.Buffer
 		cmd.Stdout = &out
@@ -44,15 +42,12 @@ func AddCronJob(schedule *string, command string) error {
 
 		var crontab string
 		if err != nil {
-			// If the crontab is empty, start fresh
 			fmt.Println("No existing crontab. Creating a new one.")
 			crontab = job + "\n"
 		} else {
-			// Append the new job to the existing crontab
 			crontab = out.String() + job + "\n"
 		}
 
-		// Write the new crontab
 		cmd = exec.Command("crontab", "-")
 		cmd.Stdin = bytes.NewBufferString(crontab)
 		err = cmd.Run()
@@ -68,13 +63,11 @@ func AddCronJob(schedule *string, command string) error {
 // RemoveCronJob removes a specific cron job containing the given identifier.
 func RemoveCronJob() error {
 	return safeExecute("RemoveCronJob", func() error {
-		// Get the current crontab
 		cmd := exec.Command("crontab", "-l")
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		err := cmd.Run()
 		if err != nil {
-			// If the crontab is empty or doesn't exist
 			if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
 				fmt.Println("No existing crontab to modify.")
 				return nil
@@ -82,7 +75,6 @@ func RemoveCronJob() error {
 			return fmt.Errorf("failed to list crontab: %w", err)
 		}
 
-		// Filter out the line with the identifier
 		lines := strings.Split(out.String(), "\n")
 		var updatedLines []string
 		for _, line := range lines {
@@ -91,7 +83,6 @@ func RemoveCronJob() error {
 			}
 		}
 
-		// Update the crontab if changes were made
 		if len(lines) != len(updatedLines) {
 			newCrontab := strings.Join(updatedLines, "\n")
 			cmd = exec.Command("crontab", "-")
@@ -113,13 +104,11 @@ func RemoveCronJob() error {
 func IsCronJobInstalled() (bool, error) {
 	var installed bool
 	err := safeExecute("IsCronJobInstalled", func() error {
-		// Get the current crontab
 		cmd := exec.Command("crontab", "-l")
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		err := cmd.Run()
 		if err != nil {
-			// If no crontab exists, treat it as not installed
 			if exitError, ok := err.(*exec.ExitError); ok && exitError.ExitCode() == 1 {
 				installed = false
 				return nil
@@ -127,7 +116,6 @@ func IsCronJobInstalled() (bool, error) {
 			return fmt.Errorf("failed to list crontab: %w", err)
 		}
 
-		// Check if the identifier exists in the crontab
 		lines := strings.Split(out.String(), "\n")
 		for _, line := range lines {
 			if strings.Contains(line, comment) {
@@ -144,21 +132,17 @@ func IsCronJobInstalled() (bool, error) {
 
 // InstallCronJob installs a cron job for the application
 func InstallCronJob(cronExpression string) error {
-	// Use default reboot schedule if none provided
 	when := "@reboot"
 	if cronExpression != "" {
 		when = cronExpression
 	}
 
-	// Get the full path to the executable
-	exePath, err := exec.LookPath("SettingsSentry")
+	exePath, err := exec.LookPath("settingssentry")
 	if err != nil {
 		return fmt.Errorf("failed to find SettingsSentry executable: %w", err)
 	}
 
-	// Build the command
 	command := fmt.Sprintf("%s backup", exePath)
 
-	// Install the cron job
 	return AddCronJob(&when, command)
 }
