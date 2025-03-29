@@ -7,13 +7,13 @@ import (
 
 // MockCommandExecutor implements interfaces.CommandExecutor for testing
 type MockCommandExecutor struct {
-	mu                sync.RWMutex
-	executedCommands  []string
-	commandResults    map[string]bool
-	commandOutputs    map[string]string
-	defaultResult     bool
-	defaultStdout     string
-	defaultStderr     string
+	mu               sync.RWMutex
+	executedCommands []string
+	commandResults   map[string]bool
+	commandOutputs   map[string]string
+	defaultResult    bool
+	defaultStdout    string
+	defaultStderr    string
 }
 
 // NewMockCommandExecutor creates a new MockCommandExecutor
@@ -66,30 +66,30 @@ func (e *MockCommandExecutor) GetExecutedCommands() []string {
 func (e *MockCommandExecutor) Execute(commandLine string, stdout, stderr io.Writer) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	// Record the command
 	e.executedCommands = append(e.executedCommands, commandLine)
-	
+
 	// Get the result
 	result, exists := e.commandResults[commandLine]
 	if !exists {
 		result = e.defaultResult
 	}
-	
+
 	// Get the output
 	output, exists := e.commandOutputs[commandLine]
 	if !exists {
 		output = e.defaultStdout
 	}
-	
+
 	// Write the output
 	if stdout != nil && output != "" {
-		stdout.Write([]byte(output))
+		_, _ = stdout.Write([]byte(output)) // Ignore write error in mock
 	}
-	
+
 	if stderr != nil && !result && e.defaultStderr != "" {
-		stderr.Write([]byte(e.defaultStderr))
+		_, _ = stderr.Write([]byte(e.defaultStderr)) // Ignore write error in mock
 	}
-	
+
 	return result
 }

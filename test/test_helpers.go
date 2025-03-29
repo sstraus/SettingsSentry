@@ -51,7 +51,7 @@ func AssertFileContent(t *testing.T, path, expectedContent string) {
 		return
 	}
 	if string(content) != expectedContent {
-		t.Errorf("File %s content does not match. Expected '%s', got '%s'", 
+		t.Errorf("File %s content does not match. Expected '%s', got '%s'",
 			path, expectedContent, string(content))
 	}
 }
@@ -59,12 +59,18 @@ func AssertFileContent(t *testing.T, path, expectedContent string) {
 // WithEnvVar temporarily sets an environment variable for the duration of the test
 func WithEnvVar(t *testing.T, key, value string, testFunc func()) {
 	original, exists := os.LookupEnv(key)
-	os.Setenv(key, value)
+	if err := os.Setenv(key, value); err != nil {
+		t.Fatalf("WithEnvVar: Failed to set env var %s: %v", key, err)
+	}
 	defer func() {
 		if exists {
-			os.Setenv(key, original)
+			if err := os.Setenv(key, original); err != nil {
+				t.Logf("WithEnvVar cleanup: Failed to restore env var %s: %v", key, err)
+			}
 		} else {
-			os.Unsetenv(key)
+			if err := os.Unsetenv(key); err != nil {
+				t.Logf("WithEnvVar cleanup: Failed to unset env var %s: %v", key, err)
+			}
 		}
 	}()
 	testFunc()

@@ -30,7 +30,9 @@ func TestPrinterPrint(t *testing.T) {
 
 	printer.Print("Third message: %s", "reset")
 
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("Failed to close pipe writer: %v", err)
+	}
 	var buf bytes.Buffer
 	_, err := io.Copy(&buf, r)
 	if err != nil {
@@ -61,7 +63,11 @@ func TestPrinterPrintWithLogger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	logFilePath := tempDir + "/test.log"
 	testLogger, err := logger.NewLogger(logFilePath)

@@ -36,7 +36,11 @@ func verifyZipContent(t *testing.T, zipPath string, expectedFiles map[string]str
 	if err != nil {
 		t.Fatalf("Failed to open zip file %s: %v", zipPath, err)
 	}
-	defer r.Close()
+	defer func() {
+		if err := r.Close(); err != nil {
+			t.Errorf("Error closing zip reader for %s: %v", zipPath, err)
+		}
+	}()
 
 	foundFiles := make(map[string]string)
 	for _, f := range r.File {
@@ -50,7 +54,11 @@ func verifyZipContent(t *testing.T, zipPath string, expectedFiles map[string]str
 			continue
 		}
 		contentBytes, err := io.ReadAll(rc)
-		rc.Close()
+		// Close rc *before* checking io.ReadAll error
+		if closeErr := rc.Close(); closeErr != nil {
+			t.Errorf("Error closing zip entry reader for %s: %v", f.Name, closeErr)
+			// Continue processing other files even if close fails
+		}
 		if err != nil {
 			t.Errorf("Failed to read file %s in zip: %v", f.Name, err)
 			continue

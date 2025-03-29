@@ -53,10 +53,21 @@ func TestGetEnvWithDefault(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.envValue != "" {
-				os.Setenv(tc.key, tc.envValue)
-				defer os.Unsetenv(tc.key)
+				if err := os.Setenv(tc.key, tc.envValue); err != nil {
+					t.Fatalf("Failed to set env var %s: %v", tc.key, err)
+				}
+				// Defer cleanup for set variable
+				defer func() {
+					if err := os.Unsetenv(tc.key); err != nil {
+						t.Logf("Warning: Failed to unset env var %s during cleanup: %v", tc.key, err)
+					}
+				}()
 			} else {
-				os.Unsetenv(tc.key)
+				// Ensure variable is unset if test case expects it to be
+				if err := os.Unsetenv(tc.key); err != nil {
+					// Log warning, as this might affect test if var wasn't unset previously
+					t.Logf("Warning: Failed to unset env var %s before test: %v", tc.key, err)
+				}
 			}
 
 			result := GetEnvWithDefault(tc.key, tc.defaultValue)

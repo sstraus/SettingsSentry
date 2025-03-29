@@ -106,18 +106,23 @@ func main() {
 	// Define a function to display help information
 	showHelp := func() {
 		appLogger.Logf("Usage: SettingsSentry <action> [-config=<path>] [-backup=<path>] [-app=<n>] [-commands] [-logfile=<path>] [-dry-run]")
+		appLogger.Logf("") // Add spacing
 		appLogger.Logf("Actions:")
 		appLogger.Logf("  backup      - Backup configuration files to the specified backup folder")
 		appLogger.Logf("  restore     - Restore the files to their original locations")
 		appLogger.Logf("  configsinit - Extract embedded default configs to a 'configs' directory next to the executable")
 		appLogger.Logf("  install     - Install the application as a CRON job that runs at every reboot (you can also provide a valid cron expression as parameter)")
 		appLogger.Logf("  remove      - Remove the previously installed CRON job")
+		appLogger.Logf("") // Add spacing
 		appLogger.Logf("Use -logfile=<path> to enable logging to a file. This will write logs to the specified file in addition to console output.")
 		appLogger.Logf("If -logfile is not provided, logs will only be written to the console.")
+		appLogger.Logf("") // Add spacing
 		appLogger.Logf("Default values:")
 		appLogger.Logf("  Configurations: %s", envConfigFolder)
 		appLogger.Logf("  Backups: %s", envBackupFolder)
+		appLogger.Logf("") // Add spacing
 		appLogger.Logf("Documentation available at https://github.com/sstraus/SettingsSentry")
+		appLogger.Logf("") // Add spacing
 
 		installed, err := cronjob.IsCronJobInstalled()
 		if err != nil {

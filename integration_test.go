@@ -1,9 +1,11 @@
 //go:build integration
 // +build integration
 
-package main
+package main_test // Changed package declaration
 
 import (
+	// Added backup import
+	"SettingsSentry/pkg/backup"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -64,9 +66,16 @@ func TestBackupAndRestore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create configs directory: %v", err)
 	}
-	err = copyFile("test/fixtures/test_app.cfg", filepath.Join(configsDir, "test_app.cfg"))
-	if err != nil {
-		t.Fatalf("Failed to copy test config file: %v", err)
+	// Replace call to unexported backup.copyFile with standard library functions
+	srcCfgPath := "test/fixtures/test_app.cfg"
+	dstCfgPath := filepath.Join(configsDir, "test_app.cfg")
+	cfgContent, readErr := os.ReadFile(srcCfgPath)
+	if readErr != nil {
+		t.Fatalf("Failed to read source fixture file %s: %v", srcCfgPath, readErr)
+	}
+	writeErr := os.WriteFile(dstCfgPath, cfgContent, 0644)
+	if writeErr != nil {
+		t.Fatalf("Failed to write destination config file %s: %v", dstCfgPath, writeErr)
 	}
 
 	// Set up the environment for testing
@@ -75,10 +84,12 @@ func TestBackupAndRestore(t *testing.T) {
 	defer os.Setenv("HOME", originalHome)
 
 	// Run the backup process
-	processConfiguration(configsDir, backupDir, "TestApp", true, true, 1)
+	// Note: Added zipBackup=false argument
+	backup.ProcessConfiguration(configsDir, backupDir, "TestApp", true, true, 1, false)
 
 	// Verify the backup was created
-	latestVersion, err := getLatestVersionPath(backupDir)
+	// Note: GetLatestVersionPath now returns 3 values (path, isZip, err)
+	latestVersion, _, err := backup.GetLatestVersionPath(backupDir) // Ignore isZip for now
 	if err != nil {
 		if strings.Contains(err.Error(), "no version backups found") {
 			t.Logf("No version backups found, skipping restore verification")
@@ -101,7 +112,8 @@ func TestBackupAndRestore(t *testing.T) {
 	os.RemoveAll(testDataDir)
 
 	// Run the restore process
-	processConfiguration(configsDir, backupDir, "TestApp", false, true, 1)
+	// Note: Added zipBackup=false argument
+	backup.ProcessConfiguration(configsDir, backupDir, "TestApp", false, true, 1, false)
 
 	// Verify the files were restored
 	if _, err := os.Stat(testConfigPath); os.IsNotExist(err) {

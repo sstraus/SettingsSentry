@@ -24,7 +24,11 @@ func TestNewLogger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	logFilePath := filepath.Join(tempDir, "test.log")
 	logger, err = NewLogger(logFilePath)
@@ -57,8 +61,8 @@ func TestNewLogger(t *testing.T) {
 	}
 	logger.Close()
 
-	// Skip this test on Windows as it's harder to create a permission denied scenario
-	if os.Getenv("OS") != "Windows_NT" {
+	// Skip this test on Windows (permission handling differs) or if running as root (root often bypasses permissions)
+	if os.Getenv("OS") != "Windows_NT" && os.Getuid() != 0 {
 		invalidDir := filepath.Join(tempDir, "invalid")
 		err = os.Mkdir(invalidDir, 0000) // No permissions
 		if err != nil {
@@ -84,7 +88,11 @@ func TestLoggerLogf(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	logFilePath := filepath.Join(tempDir, "test.log")
 	logger, err := NewLogger(logFilePath)
@@ -111,7 +119,11 @@ func TestLoggerLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	logFilePath := filepath.Join(tempDir, "test.log")
 	logger, err := NewLogger(logFilePath)
@@ -137,7 +149,11 @@ func TestLoggerClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	logFilePath := filepath.Join(tempDir, "test.log")
 	logger, err := NewLogger(logFilePath)

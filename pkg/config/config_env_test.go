@@ -13,10 +13,22 @@ import (
 func TestExpandEnvVars(t *testing.T) {
 	setupTestDependencies()
 
-	os.Setenv("TEST_VAR", "test_value")
-	os.Setenv("HOME_DIR", "/home/user")
-	defer os.Unsetenv("TEST_VAR")
-	defer os.Unsetenv("HOME_DIR")
+	if err := os.Setenv("TEST_VAR", "test_value"); err != nil {
+		t.Fatalf("Failed to set TEST_VAR: %v", err)
+	}
+	if err := os.Setenv("HOME_DIR", "/home/user"); err != nil {
+		t.Fatalf("Failed to set HOME_DIR: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("TEST_VAR"); err != nil {
+			t.Logf("Warning: Failed to unset TEST_VAR during cleanup: %v", err)
+		}
+	}()
+	defer func() {
+		if err := os.Unsetenv("HOME_DIR"); err != nil {
+			t.Logf("Warning: Failed to unset HOME_DIR during cleanup: %v", err)
+		}
+	}()
 
 	testCases := []struct {
 		input    string
@@ -112,18 +124,40 @@ func TestValidateConfig(t *testing.T) {
 func TestParseConfigWithEnvVars(t *testing.T) {
 	setupTestDependencies()
 
-	os.Setenv("TEST_APP_NAME", "EnvTestApp")
-	os.Setenv("TEST_CONFIG_FILE", ".env_testconfig")
-	os.Setenv("TEST_BACKUP_CMD", "echo env_backup")
-	defer os.Unsetenv("TEST_APP_NAME")
-	defer os.Unsetenv("TEST_CONFIG_FILE")
-	defer os.Unsetenv("TEST_BACKUP_CMD")
+	if err := os.Setenv("TEST_APP_NAME", "EnvTestApp"); err != nil {
+		t.Fatalf("Failed to set TEST_APP_NAME: %v", err)
+	}
+	if err := os.Setenv("TEST_CONFIG_FILE", ".env_testconfig"); err != nil {
+		t.Fatalf("Failed to set TEST_CONFIG_FILE: %v", err)
+	}
+	if err := os.Setenv("TEST_BACKUP_CMD", "echo env_backup"); err != nil {
+		t.Fatalf("Failed to set TEST_BACKUP_CMD: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("TEST_APP_NAME"); err != nil {
+			t.Logf("Warning: Failed to unset TEST_APP_NAME during cleanup: %v", err)
+		}
+	}()
+	defer func() {
+		if err := os.Unsetenv("TEST_CONFIG_FILE"); err != nil {
+			t.Logf("Warning: Failed to unset TEST_CONFIG_FILE during cleanup: %v", err)
+		}
+	}()
+	defer func() {
+		if err := os.Unsetenv("TEST_BACKUP_CMD"); err != nil {
+			t.Logf("Warning: Failed to unset TEST_BACKUP_CMD during cleanup: %v", err)
+		}
+	}()
 
 	tempDir, err := os.MkdirTemp("", "settingssentry-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	configContent := `[application]
 name = ${TEST_APP_NAME}

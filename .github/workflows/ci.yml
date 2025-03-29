@@ -19,10 +19,12 @@ jobs:
         with:
           go-version: '1.24'
           check-latest: true
-
+      # Removed blank line here
       - name: Install golangci-lint
         run: |
-          brew install golangci-lint
+          # Install the latest golangci-lint using the official script
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+          # The script automatically installs the latest version if no version tag is provided
           golangci-lint --version
 
       - name: Run golangci-lint
@@ -47,7 +49,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          file: ./coverage.txt
+          files: ./coverage.txt # Changed 'file' to 'files'
           fail_ci_if_error: false
 
   integration-test:

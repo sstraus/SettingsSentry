@@ -89,6 +89,7 @@ func (l *Logger) LogErrorf(format string, v ...interface{}) error {
 
 func (l *Logger) Close() {
 	if l.logFile != nil {
-		l.logFile.Close()
+		// Explicitly ignore close error, as logging it might be problematic
+		_ = l.logFile.Close()
 	}
 }

@@ -9,6 +9,7 @@ __Securely archive and reinstate your macOS application configurations, simplify
 ![Language](https://img.shields.io/github/languages/sstraus/SettingsSentry)
 ![Downloads](https://img.shields.io/github/downloads/sstraus/SettingsSentry/latest)
 ![Size](https://img.shields.io/github/repo-size/sstraus/SettingsSentry)
+```
 
 SettingsSentry is a lightweight macOS tool that __backs up and restores your application settings__, so you don’t lose them during system resets, migrations, or disk issues.
 

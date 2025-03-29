@@ -24,38 +24,7 @@ var (
 	Printer   *printer.Printer
 )
 
-func getVersionedBackupPath(baseBackupPath string, createNew bool) (string, error) {
-	if !createNew {
-		// For restore operations, just use the latest version
-		// TODO: Revisit this function's purpose with zip logic. Ignoring isZip for now.
-		latestPath, _, err := GetLatestVersionPath(baseBackupPath)
-		return latestPath, err
-	}
-
-	// For backup operations, create a new version
-	timestamp := time.Now().Format("20060102-150405")
-	versionedPath := Fs.Join(baseBackupPath, timestamp)
-
-	_, err := Fs.Stat(versionedPath)
-	if os.IsNotExist(err) {
-		// Directory doesn't exist, will be created below
-	} else if err != nil {
-		// Handle other stat errors
-		return "", AppLogger.LogErrorf("failed to stat potential versioned backup directory: %w", err)
-	}
-
-	// Create the versioned directory if not in dry run
-	if !DryRun {
-		err := Fs.MkdirAll(versionedPath, 0755)
-		if err != nil {
-			return "", AppLogger.LogErrorf("failed to create versioned backup directory: %w", err)
-		}
-	} else {
-		AppLogger.Logf("Dry run: Would create versioned backup directory: %s", versionedPath)
-	}
-
-	return versionedPath, nil
-}
+// getVersionedBackupPath removed as unused (superseded by logic in ProcessConfiguration and GetLatestVersionPath)
 
 // GetLatestVersionPath returns the path to the latest backup version (directory or zip)
 // and a boolean indicating if it's a zip file.
@@ -227,7 +196,11 @@ func copyFile(src, dst string) error {
 		return AppLogger.LogErrorf("failed to open source file '%s': %w", src, err)
 	}
 	// Defer close *after* checking for error
-	defer srcFile.Close()
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			AppLogger.Logf("Error closing source file %s: %v", src, err)
+		}
+	}()
 
 	// Ensure destination directory exists
 	err = Fs.MkdirAll(Fs.Dir(dst), 0755)
@@ -240,7 +213,11 @@ func copyFile(src, dst string) error {
 		return AppLogger.LogErrorf("failed to create destination file '%s': %w", dst, err)
 	}
 	// Defer close *after* checking for error
-	defer dstFile.Close()
+	defer func() {
+		if err := dstFile.Close(); err != nil {
+			AppLogger.Logf("Error closing destination file %s: %v", dst, err)
+		}
+	}()
 
 	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
@@ -374,15 +351,18 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 		// Use os.MkdirTemp directly as it's a standard OS operation
 		stagingDir, tempErr = os.MkdirTemp("", "settingssentry-zip-")
 		if tempErr != nil {
-			AppLogger.LogErrorf("Failed to create temporary staging directory: %v", tempErr)
-			return // Cannot proceed with zip backup without staging dir
+			_ = AppLogger.LogErrorf("Failed to create temporary staging directory: %v", tempErr) // Ignore error return
+			return                                                                               // Cannot proceed with zip backup without staging dir
 		}
 		AppLogger.Logf("Using staging directory for zip backup: %s", stagingDir)
 		// Ensure staging directory is cleaned up
 		defer func() {
 			if stagingDir != "" {
 				AppLogger.Logf("Cleaning up staging directory: %s", stagingDir)
-				Fs.RemoveAll(stagingDir)
+				if err := Fs.RemoveAll(stagingDir); err != nil {
+					// Log the error but don't stop execution as it's cleanup
+					AppLogger.Logf("Error removing staging directory %s: %v", stagingDir, err)
+				}
 			}
 		}()
 	}
@@ -677,12 +657,12 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 	if isBackup && zipBackup {
 		if stagingDir == "" {
 			// Should not happen if staging dir creation succeeded earlier
-			AppLogger.LogErrorf("Staging directory path is empty, cannot create zip archive.")
+			_ = AppLogger.LogErrorf("Staging directory path is empty, cannot create zip archive.") // Ignore error return
 		} else {
 			targetZipPath := Fs.Join(backupFolder, timestamp+".zip")
 			AppLogger.Logf("Creating zip archive: %s", targetZipPath)
 			if err := createZipArchive(stagingDir, targetZipPath); err != nil {
-				AppLogger.LogErrorf("Failed to create zip archive: %v", err)
+				_ = AppLogger.LogErrorf("Failed to create zip archive: %v", err) // Ignore error return
 				// Note: Staging dir will still be cleaned up by the deferred RemoveAll
 			} else {
 				AppLogger.Logf("Successfully created zip archive: %s", targetZipPath)
@@ -709,10 +689,20 @@ func createZipArchive(sourceDir, targetZipPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create zip file '%s': %w", targetZipPath, err)
 	}
-	defer zipFile.Close()
+	defer func() {
+		if err := zipFile.Close(); err != nil {
+			// Log error, but don't return it from createZipArchive as the primary operation might have succeeded
+			AppLogger.Logf("Error closing zip file %s: %v", targetZipPath, err)
+		}
+	}()
 
 	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
+	defer func() {
+		if err := zipWriter.Close(); err != nil {
+			// Log error, but don't return it from createZipArchive
+			AppLogger.Logf("Error closing zip writer for %s: %v", targetZipPath, err)
+		}
+	}()
 
 	// Walk the staging directory
 	err = filepath.Walk(sourceDir, func(filePath string, info os.FileInfo, err error) error {
@@ -759,7 +749,13 @@ func createZipArchive(sourceDir, targetZipPath string) error {
 		if err != nil {
 			return fmt.Errorf("failed to open file '%s' for zipping: %w", filePath, err)
 		}
-		defer fileToZip.Close()
+		// Defer close inside the loop iteration
+		defer func() {
+			if err := fileToZip.Close(); err != nil {
+				// Log error, but let Walk continue if possible
+				AppLogger.Logf("Error closing file %s during zipping: %v", filePath, err)
+			}
+		}()
 
 		_, err = io.Copy(writer, fileToZip)
 		if err != nil {
@@ -783,7 +779,11 @@ func extractFromZip(zipPath, entryPath, destinationPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open zip archive '%s': %w", zipPath, err)
 	}
-	defer r.Close()
+	defer func() {
+		if err := r.Close(); err != nil {
+			AppLogger.Logf("Error closing zip reader for %s: %v", zipPath, err)
+		}
+	}()
 
 	// Normalize entryPath to use forward slashes, as used in zip headers
 	entryPath = filepath.ToSlash(entryPath)
@@ -828,19 +828,34 @@ func extractFromZip(zipPath, entryPath, destinationPath string) error {
 			// Create the destination file.
 			dstFile, err := os.OpenFile(extractPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 			if err != nil {
-				rc.Close() // Close the source file before returning error
+				_ = rc.Close() // Close the source file before returning error (ignore close error here)
 				return fmt.Errorf("failed to create destination file '%s': %w", extractPath, err)
 			}
 
 			// Copy the contents.
 			_, err = io.Copy(dstFile, rc)
 
-			// Close files
-			rc.Close()
-			dstFile.Close()
+			// Close files, log errors if they occur
+			closeErrRc := rc.Close()
+			closeErrDst := dstFile.Close()
+
+			if closeErrRc != nil {
+				AppLogger.Logf("Error closing zip entry reader for %s: %v", f.Name, closeErrRc)
+			}
+			if closeErrDst != nil {
+				AppLogger.Logf("Error closing destination file %s: %v", extractPath, closeErrDst)
+			}
 
 			if err != nil {
+				// Return the io.Copy error if it occurred
 				return fmt.Errorf("failed to copy content to '%s': %w", extractPath, err)
+			}
+			// If io.Copy succeeded, return potential close errors (prefer dst error)
+			if closeErrDst != nil {
+				return fmt.Errorf("error closing destination file '%s': %w", extractPath, closeErrDst)
+			}
+			if closeErrRc != nil {
+				return fmt.Errorf("error closing zip entry reader '%s': %w", f.Name, closeErrRc)
 			}
 		}
 	}
