@@ -2,11 +2,9 @@
 
 __Securely archive and reinstate your macOS application configurations, simplifying system recovery processes.__
 
-```markdown
 ![License](https://img.shields.io/github/license/sstraus/SettingsSentry)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Build](https://img.shields.io/github/go-mod/go-version/sstraus/SettingsSentry)
-![Language](https://img.shields.io/github/languages/sstraus/SettingsSentry)
 ![Downloads](https://img.shields.io/github/downloads/sstraus/SettingsSentry/latest)
 ![Size](https://img.shields.io/github/repo-size/sstraus/SettingsSentry)
 ```
