@@ -2,9 +2,35 @@
 
 __Securely archive and reinstate your macOS application configurations, simplifying system recovery processes.__
 
-SettingsSentry is a lightweight and efficient tool written in Go to backup and restore macOS application configurations. It ensures your personalized settings are securely archived and easily reinstated, simplifying system recovery processes.
+```markdown
+![License](https://img.shields.io/github/license/sstraus/SettingsSentry)
+![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
+![Build](https://img.shields.io/github/go-mod/go-version/sstraus/SettingsSentry)
+![Language](https://img.shields.io/github/languages/sstraus/SettingsSentry)
+![Downloads](https://img.shields.io/github/downloads/sstraus/SettingsSentry/latest)
+![Size](https://img.shields.io/github/repo-size/sstraus/SettingsSentry)
+
+SettingsSentry is a lightweight macOS tool that __backs up and restores your application settings__, so you don’t lose them during system resets, migrations, or disk issues.
+
+Whether you want to __sync settings across machines__, __version your preferences__, or simply __avoid starting from scratch__, SettingsSentry makes it easy. Unlike Mackup, it fully supports macOS Sonoma+ and doesn’t risk breaking your preferences.
+
+🛠 No GUI needed — install it once, automate it with cron, and let it handle the rest.
 
 Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created to address compatibility issues with macOS Sonoma and later versions. Unlike Mackup, which no longer supports symlinked preference files and risks destroying user preferences, SettingsSentry provides a reliable solution.
+
+## Why use SettingsSentry instead of Mackup?
+
+- ✅ Full compatibility with macOS Sonoma and future versions  
+- ✅ No risk of overwriting your settings via symlinks  
+- ✅ Dry-run support to preview operations  
+- ✅ Cron integration for automated syncing  
+- ✅ Backup and restore of macOS preferences  
+- ✅ Support for environment variables in configuration paths and values  
+- ✅ Configuration validation to ensure all required fields are present  
+- ✅ Versioned backups with timestamp-based directories  
+- ✅ Dry-run mode to preview operations without making changes  
+- ✅ Optional ZIP archive backup format (`-zip` flag)  
+
 
 ## Features
 
@@ -17,7 +43,6 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - Versioned backups with timestamp-based directories.
 - Dry-run mode to preview operations without making changes.
 - Optional ZIP archive backup format (`-zip` flag).
-
 
 ## Usage
 
@@ -39,22 +64,21 @@ Backups: iCloud Drive/settingssentry_backups
 
 #### Options
 
-- `--config` `<path>`: Path to the configuration folder (default: `configs`).
+- `-config` `<path>`: Path to the configuration folder (default: `configs`).
 
-- `--backup` `<path>`: Path to the backup folder (default: `iCloud Drive/settingssentry_backups`).
+- `-backup` `<path>`: Path to the backup folder (default: `iCloud Drive/settingssentry_backups`).
 
-- `--app` `<n>`: Optional name of the application to process.
+- `-app` `<n>`: Optional name of the application to process.
 
 - `-commands`: Executes pre and post commands during backup or restore where available.
 
-- `--dry-run`: Perform a dry run without making any changes.
+- `-dry-run`: Perform a dry run without making any changes.
 
-- `--versions` `<n>`: Number of backup versions to keep (default: 1, 0 = keep all).
+- `-versions` `<n>`: Number of backup versions to keep (default: 1, 0 = keep all).
 
 - `-zip`: Create backup as a timestamped `.zip` archive instead of a directory (backup action only).
 
-
-- `--logfile` `<path>`: Path to log file. If provided, logs will be written to this file in addition to console output.
+- `-logfile` `<path>`: Path to log file. If provided, logs will be written to this file in addition to console output.
 
 ### Environment Variables
 
@@ -125,10 +149,10 @@ The dry-run mode allows you to preview what would happen during backup or restor
 2. Verifying what files would be backed up or restored
 3. Checking which commands would be executed
 
-To use dry-run mode, add the `--dry-run` flag to your command:
+To use dry-run mode, add the `-dry-run` flag to your command:
 
 ```sh
-./SettingsSentry backup --dry-run
+./SettingsSentry backup -dry-run
 ```
 
 ## License
