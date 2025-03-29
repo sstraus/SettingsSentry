@@ -38,7 +38,11 @@ func TestCopyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	srcContent := "test content"
 	srcPath := filepath.Join(tempDir, "source.txt")
@@ -70,7 +74,11 @@ func TestCopyDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	srcDir := filepath.Join(tempDir, "src")
 	err = os.MkdirAll(filepath.Join(srcDir, "subdir"), 0755)

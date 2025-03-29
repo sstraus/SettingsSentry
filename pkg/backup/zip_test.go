@@ -467,7 +467,10 @@ name = %s
 	if err := createZipArchive(stagingDir, zipFilePath); err != nil {
 		t.Fatalf("Setup failed: Could not create test zip backup: %v", err)
 	}
-	os.RemoveAll(stagingDir) // Clean up staging dir used for setup
+	// Clean up staging dir used for setup, checking error
+	if err := os.RemoveAll(stagingDir); err != nil {
+		t.Errorf("Failed to remove staging dir %s during setup cleanup: %v", stagingDir, err)
+	}
 
 	// Ensure the restore destination does NOT exist before restore
 	restoreFilePathFinal := filepath.Join(restoreDestDir, sourceFileName)

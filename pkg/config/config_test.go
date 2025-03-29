@@ -53,7 +53,11 @@ func TestParseConfigWithComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	configContent := `[application]
 # This is a comment
