@@ -118,9 +118,12 @@ func TestEncrypt_EmptyPassword(t *testing.T) {
 func TestDecrypt_EmptyPassword(t *testing.T) {
 	// Need some dummy data that looks like encrypted data structure
 	dummyData := make([]byte, saltSize+nonceSize+16) // 16 bytes dummy ciphertext
-	rand.Read(dummyData)                             // Fill with random bytes
+	_, err := rand.Read(dummyData)                   // Fill with random bytes
+	if err != nil {
+		t.Fatalf("Failed to generate dummy data: %v", err)
+	}
 
-	_, err := decrypt(dummyData, "")
+	_, err = decrypt(dummyData, "")
 	if err == nil {
 		t.Errorf("decrypt() succeeded with empty password, expected error")
 	} else {
@@ -131,9 +134,12 @@ func TestDecrypt_EmptyPassword(t *testing.T) {
 func TestDecrypt_ShortData(t *testing.T) {
 	password := "correct-password"
 	shortData := make([]byte, saltSize+nonceSize-1) // Too short
-	rand.Read(shortData)
+	_, err := rand.Read(shortData)
+	if err != nil {
+		t.Fatalf("Failed to generate short data: %v", err)
+	}
 
-	_, err := decrypt(shortData, password)
+	_, err = decrypt(shortData, password)
 	if err == nil {
 		t.Errorf("decrypt() succeeded with data shorter than salt+nonce, expected error")
 	} else if !bytes.Contains([]byte(err.Error()), []byte("too short")) { // Check if error message indicates the length issue
@@ -143,7 +149,10 @@ func TestDecrypt_ShortData(t *testing.T) {
 	}
 
 	justEnoughData := make([]byte, saltSize+nonceSize) // Just salt+nonce, no ciphertext
-	rand.Read(justEnoughData)
+	_, err = rand.Read(justEnoughData)
+	if err != nil {
+		t.Fatalf("Failed to generate just-enough data: %v", err)
+	}
 	_, err = decrypt(justEnoughData, password)
 	if err == nil {
 		t.Errorf("decrypt() succeeded with data containing only salt+nonce, expected error")

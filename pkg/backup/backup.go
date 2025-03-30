@@ -576,8 +576,17 @@ func ProcessConfiguration(configFolder, backupFolder string, appNames []string, 
 								return fmt.Errorf("failed to create temp file for zip extraction: %w", err)
 							}
 							tempFilePath := tempFile.Name()
-							tempFile.Close()
-							defer os.Remove(tempFilePath)
+							// Check error on close immediately
+							if closeErr := tempFile.Close(); closeErr != nil {
+								// Attempt to remove before returning, but prioritize close error
+								_ = os.Remove(tempFilePath) // Ignore remove error if close failed
+								return fmt.Errorf("failed to close temp file handle: %w", closeErr)
+							}
+							defer func() {
+								if removeErr := os.Remove(tempFilePath); removeErr != nil {
+									AppLogger.Logf("Warning: Failed to remove temp decryption file %s: %v", tempFilePath, removeErr)
+								}
+							}() // Check remove error in defer
 
 							err = extractFromZip(latestVersion, encryptedSourcePathInZip, tempFilePath)
 							if err != nil {
@@ -849,32 +858,6 @@ func createZipArchive(sourceDir, targetZipPath string) error {
 	}
 
 	return nil
-}
-
-// zipContainsEncrypted checks if a zip archive contains a specific entry.
-func zipContainsEncrypted(zipPath, internalEncryptedPath string) (bool, error) {
-	internalEncryptedPath = filepath.ToSlash(internalEncryptedPath)
-
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to open zip archive '%s' for inspection: %w", zipPath, err)
-	}
-	defer func() {
-		if err := r.Close(); err != nil {
-			AppLogger.Logf("Error closing zip reader for inspection %s: %v", zipPath, err)
-		}
-	}()
-
-	for _, f := range r.File {
-		if f.Name == internalEncryptedPath {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 // extractFromZip extracts a specific file or directory from a zip archive to a destination path.

@@ -77,27 +77,17 @@ func main() {
 		}
 	}
 
+	// Get environment variable defaults
 	envConfigFolder := util.GetEnvWithDefault("SETTINGSSENTRY_CONFIG", "configs")
 	envBackupFolder := util.GetEnvWithDefault("SETTINGSSENTRY_BACKUP", icloud_path)
-	envAppName := os.Getenv("SETTINGSSENTRY_APP") // Keep reading single string from env
+	envAppName := os.Getenv("SETTINGSSENTRY_APP")
 	envCommands := os.Getenv("SETTINGSSENTRY_COMMANDS") == "true"
 	envDryRun := os.Getenv("SETTINGSSENTRY_DRY_RUN") == "true"
 	envZip := os.Getenv("SETTINGSSENTRY_ZIP") == "true"
 	envPassword := os.Getenv("SETTINGSSENTRY_PASSWORD")
 
-	// Define flags
-	configFolder := flag.String("config", envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
-	backupFolder := flag.String("backup", envBackupFolder, "Path to the backup folder (env: SETTINGSSENTRY_BACKUP)")
-	// Keep appName as string flag, will split later
-	appNameFlag := flag.String("app", envAppName, "Optional: Comma-separated list of application names to process (env: SETTINGSSENTRY_APP)")
-	commands := flag.Bool("commands", envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
-	dryRunFlag := flag.Bool("dry-run", envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
-	versionsToKeep := flag.Int("versions", 1, "Number of backup versions to keep")
-	password := flag.String("password", envPassword, "Optional: Password to encrypt/decrypt backups (env: SETTINGSSENTRY_PASSWORD)")
-	zipFlag := flag.Bool("zip", envZip, "Optional: Create backup as a zip archive instead of a directory (env: SETTINGSSENTRY_ZIP)")
-
+	// Define showHelp function (needs env vars)
 	showHelp := func() {
-		// Update usage string to reflect comma-separated apps
 		appLogger.Logf("Usage: SettingsSentry <action> [-config=<path>] [-backup=<path>] [-app=<app1,app2,...>] [-commands] [-logfile=<path>] [-dry-run]")
 		appLogger.Logf("")
 		appLogger.Logf("Actions:")
@@ -128,41 +118,39 @@ func main() {
 		}
 	}
 
-	flag.Usage = showHelp
+	flag.Usage = showHelp // Set global usage
 
-	// Re-parse flags after defining them all
-	// Note: We already did a preliminary parse for logFilePath
-	// We need to parse the *remaining* arguments after the action
-	if len(os.Args) < 2 {
+	// Check for general help flags before parsing action-specific flags
+	if len(os.Args) < 2 || (len(os.Args) == 2 && (os.Args[1] == "-h" || os.Args[1] == "--help")) {
 		showHelp()
 		return
 	}
+
 	action := os.Args[1] // Action is the first argument
 
-	// Parse flags specifically for the current action
+	// Define flags using a specific FlagSet for the action
 	actionFlags := flag.NewFlagSet(action, flag.ExitOnError)
-	// Redefine flags for this specific flag set
-	configFolder = actionFlags.String("config", envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
-	backupFolder = actionFlags.String("backup", envBackupFolder, "Path to the backup folder (env: SETTINGSSENTRY_BACKUP)")
-	appNameFlag = actionFlags.String("app", envAppName, "Optional: Comma-separated list of application names to process (env: SETTINGSSENTRY_APP)")
-	commands = actionFlags.Bool("commands", envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
-	dryRunFlag = actionFlags.Bool("dry-run", envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
-	versionsToKeep = actionFlags.Int("versions", 1, "Number of backup versions to keep")
-	password = actionFlags.String("password", envPassword, "Optional: Password to encrypt/decrypt backups (env: SETTINGSSENTRY_PASSWORD)")
-	zipFlag = actionFlags.Bool("zip", envZip, "Optional: Create backup as a zip archive instead of a directory (env: SETTINGSSENTRY_ZIP)")
-	// Add logFilePath flag to this set as well, although it was parsed earlier
+	configFolder := actionFlags.String("config", envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
+	backupFolder := actionFlags.String("backup", envBackupFolder, "Path to the backup folder (env: SETTINGSSENTRY_BACKUP)")
+	appNameFlag := actionFlags.String("app", envAppName, "Optional: Comma-separated list of application names to process (env: SETTINGSSENTRY_APP)")
+	commands := actionFlags.Bool("commands", envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
+	dryRunFlag := actionFlags.Bool("dry-run", envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
+	versionsToKeep := actionFlags.Int("versions", 1, "Number of backup versions to keep")
+	password := actionFlags.String("password", envPassword, "Optional: Password to encrypt/decrypt backups (env: SETTINGSSENTRY_PASSWORD)")
+	zipFlag := actionFlags.Bool("zip", envZip, "Optional: Create backup as a zip archive instead of a directory (env: SETTINGSSENTRY_ZIP)")
+	// Add logFilePath flag to this set as well, using the value parsed earlier
 	_ = actionFlags.String("logfile", *logFilePath, "Optional: Path to log file.")
 
 	// Parse arguments starting from the one after the action
 	if err := actionFlags.Parse(os.Args[2:]); err != nil {
 		appLogger.Logf("Error parsing flags for action '%s': %v\n", action, err)
-		// Show help specific to the action? Or general help? General for now.
 		showHelp()
 		return
 	}
 
-	// Handle -h/--help after parsing action flags
-	if *appNameFlag == "-h" || *appNameFlag == "--help" { // Simple check if help flag was mistakenly passed as app name
+	// Handle -h/--help specifically after parsing action flags (in case it's the only arg after action)
+	// This check might be redundant if flag.ExitOnError handles it, but added for clarity.
+	if len(os.Args) == 3 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
 		showHelp()
 		return
 	}
@@ -186,10 +174,8 @@ func main() {
 
 	switch action {
 	case "backup":
-		// Pass the appNames slice
 		backup.ProcessConfiguration(*configFolder, *backupFolder, appNames, true, *commands, *versionsToKeep, *zipFlag, *password)
 	case "restore":
-		// Pass the appNames slice
 		backup.ProcessConfiguration(*configFolder, *backupFolder, appNames, false, *commands, *versionsToKeep, false, *password)
 	case "configsinit":
 		err := util.ExtractEmbeddedConfigs(embeddedConfigsFiles)
