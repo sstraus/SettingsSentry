@@ -25,12 +25,12 @@ archives:
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
+    # files section simplified back to basic include
     files:
-      - configs/**        # Include everything in configs...
-      - "!configs/TestCommand.cfg" # ...except this specific file
+      - configs/*.cfg        # Include everything in configs...
+
 checksum: # Correct indentation
   name_template: 'checksums.txt'
-
 
 changelog:
   sort: asc

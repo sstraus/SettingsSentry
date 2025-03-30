@@ -53,7 +53,14 @@ clean:
 	rm -f coverage.out
 
 release:
-	goreleaser release --snapshot --clean
+	@echo "Temporarily renaming TestCommand.cfg..."
+	@mv configs/TestCommand.cfg configs/TestCommand.not_embed || true
+	@echo "Building..."
+	@goreleaser release --snapshot --clean ; \
+	EXIT_CODE=$$? ; \
+	echo "Renaming TestCommand.cfg back..." ; \
+	mv configs/TestCommand.not_embed configs/TestCommand.cfg || true ; \
+	exit $$EXIT_CODE
 
 dmg:
 	mkdir -p ./${BINARY_NAME}.app/Contents/MacOS

@@ -5,9 +5,7 @@ __Securely archive and reinstate your macOS application configurations, simplify
 ![License](https://img.shields.io/github/license/sstraus/SettingsSentry)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)
 ![Build](https://img.shields.io/github/go-mod/go-version/sstraus/SettingsSentry)
-![Downloads](https://img.shields.io/github/downloads/sstraus/SettingsSentry/latest)
 ![Size](https://img.shields.io/github/repo-size/sstraus/SettingsSentry)
-```
 
 SettingsSentry is a lightweight macOS tool that __backs up and restores your application settings__, so you don’t lose them during system resets, migrations, or disk issues.
 
@@ -46,7 +44,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 
 ## Usage
 
-./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=<app1,app2,...>] [-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`] [-password=<pwd>] [-zip]
+./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<app1,app2,...>`] [-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`] [-password=<pwd>] [-zip]
 
 ### Actions
 
