@@ -699,7 +699,7 @@ func ProcessConfiguration(configFolder, backupFolder string, appNames []string, 
 					} else {
 						backupSourceInfo, statErr := Fs.Stat(versionedBackupPath)
 						if statErr != nil {
-							Printer.Print("Error accessing backup source %s: %v\n", versionedBackupPath, statErr)
+							//Printer.Print("Error accessing backup source %s: %v\n", versionedBackupPath, statErr)
 							return nil
 						}
 						if backupSourceInfo.IsDir() {
