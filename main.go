@@ -92,6 +92,7 @@ func main() {
 	envCommands := os.Getenv("SETTINGSSENTRY_COMMANDS") == "true"
 	envDryRun := os.Getenv("SETTINGSSENTRY_DRY_RUN") == "true"
 	envZip := os.Getenv("SETTINGSSENTRY_ZIP") == "true"
+	envPassword := os.Getenv("SETTINGSSENTRY_PASSWORD") // Read password from env
 
 	// Define shared command-line flags with environment variable defaults
 	configFolder := flag.String("config", envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
@@ -100,6 +101,7 @@ func main() {
 	commands := flag.Bool("commands", envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
 	dryRunFlag := flag.Bool("dry-run", envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
 	versionsToKeep := flag.Int("versions", 1, "Number of backup versions to keep")
+	password := flag.String("password", envPassword, "Optional: Password to encrypt/decrypt backups (env: SETTINGSSENTRY_PASSWORD)")
 
 	zipFlag := flag.Bool("zip", envZip, "Optional: Create backup as a zip archive instead of a directory (env: SETTINGSSENTRY_ZIP)")
 
@@ -166,11 +168,12 @@ func main() {
 
 	switch action {
 	case "backup":
-		// Pass the zip flag value to ProcessConfiguration
-		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, true, *commands, *versionsToKeep, *zipFlag)
+		// Pass the zip flag and password value to ProcessConfiguration
+		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, true, *commands, *versionsToKeep, *zipFlag, *password)
 	case "restore":
 		// Pass false for zipBackup during restore, as it's determined by the found backup
-		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, false, *commands, *versionsToKeep, false)
+		// Pass password for potential decryption
+		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, false, *commands, *versionsToKeep, false, *password)
 	case "configsinit":
 		err := util.ExtractEmbeddedConfigs(embeddedConfigsFiles)
 		if err != nil {

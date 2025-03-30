@@ -5,7 +5,7 @@ import (
 	"SettingsSentry/logger"
 	"bufio"
 	"errors"
-	"fmt" // Keep one fmt import
+	"fmt"
 	iofs "io/fs"
 	"os"
 	"path/filepath"
@@ -195,6 +195,8 @@ func ParseConfig(filesystem iofs.FS, filePath string) (Config, error) {
 			}
 		case "files", "configuration_files":
 			config.Files = append(config.Files, ExpandEnvVars(line))
+			fmt.Printf("[DEBUG ParseConfig] Adding file: %s (Section: %s)\n", line, section)
+
 		case "xdg_configuration_files":
 			path := ExpandEnvVars(line)
 			if strings.HasPrefix(path, "/") {

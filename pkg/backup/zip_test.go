@@ -392,7 +392,7 @@ name = MyZipApp
 	createDummyFile(t, cfgPath, cfgContent)
 
 	// --- Perform Zip Backup ---
-	ProcessConfiguration(configDir, backupDir, "", true, false, 1, true) // zipBackup = true
+	ProcessConfiguration(configDir, backupDir, "", true, false, 1, true, "") // zipBackup = true, password=""
 
 	// --- Verification ---
 	// Find the created zip file (should be only one entry)
@@ -462,7 +462,8 @@ name = %s
 	zipFileName := zipTimestamp + ".zip"
 	zipFilePath := filepath.Join(backupDir, zipFileName)
 	stagingDir := filepath.Join(tempDir, "staging_for_restore_test")
-	stagedFilePath := filepath.Join(stagingDir, appName, sourceFileName)
+	// Create the non-encrypted file in staging
+	stagedFilePath := filepath.Join(stagingDir, appName, sourceFileName) // Removed ".encrypted"
 	createDummyFile(t, stagedFilePath, sourceFileContent)
 	if err := createZipArchive(stagingDir, zipFilePath); err != nil {
 		t.Fatalf("Setup failed: Could not create test zip backup: %v", err)
@@ -480,7 +481,7 @@ name = %s
 
 	// --- Perform Restore ---
 	// We pass zipBackup=false because restore determines type automatically
-	ProcessConfiguration(configDir, backupDir, "", false, false, 1, false)
+	ProcessConfiguration(configDir, backupDir, "", false, false, 1, false, "") // password=""
 
 	// --- Verification ---
 	// Check if the file was restored to the correct destination

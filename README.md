@@ -42,10 +42,11 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - Versioned backups with timestamp-based directories.
 - Dry-run mode to preview operations without making changes.
 - Optional ZIP archive backup format (`-zip` flag).
+- Optional password-based encryption (`-password` flag).
 
 ## Usage
 
-./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<n>`] [-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`]
+./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<n>`] [-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`] [-password=<pwd>] [-zip]
 
 ### Actions
 
@@ -79,6 +80,8 @@ Backups: iCloud Drive/settingssentry_backups
 
 - `-logfile` `<path>`: Path to log file. If provided, logs will be written to this file in addition to console output.
 
+- `-password` `<pwd>`: Optional password to encrypt backups (using AES-GCM). If provided during backup, files will be encrypted and saved with a `.encrypted` extension. This password **must** be provided again during restore to decrypt the files.
+
 ### Environment Variables
 
 SettingsSentry supports the following environment variables:
@@ -88,6 +91,7 @@ SettingsSentry supports the following environment variables:
 - `SETTINGSSENTRY_APP`: Optional name of the application to process.
 - `SETTINGSSENTRY_COMMANDS`: Set to 'true' to perform command execution during backup or restore.
 - `SETTINGSSENTRY_DRY_RUN`: Set to 'true' to perform a dry run without making any changes.
+- `SETTINGSSENTRY_PASSWORD`: Password for encryption/decryption (alternative to `-password` flag).
 
 ### Configuration Files
 
@@ -149,6 +153,17 @@ The dry-run mode allows you to preview what would happen during backup or restor
 3. Checking which commands would be executed
 
 To use dry-run mode, add the `-dry-run` flag to your command:
+
+
+### Encryption
+
+SettingsSentry supports optional password-based encryption for your backups using AES-256-GCM.
+
+- To **encrypt** a backup, provide a password using the `-password "your-secret-password"` flag or the `SETTINGSSENTRY_PASSWORD` environment variable during the `backup` action.
+- Encrypted files will be stored with a `.encrypted` extension appended to their original name within the timestamped backup directory or zip file.
+- To **restore** an encrypted backup, you **must** provide the **same password** using the `-password` flag or the `SETTINGSSENTRY_PASSWORD` environment variable during the `restore` action.
+- If an encrypted backup (`.encrypted` files) is detected during restore and no password is provided, the restore for those files will fail with an error message prompting for the password.
+- **Security Note:** The security of the encryption relies heavily on the strength of the password you choose. Use a strong, unique password.
 
 ```sh
 ./SettingsSentry backup -dry-run

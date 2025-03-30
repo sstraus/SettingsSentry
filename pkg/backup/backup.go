@@ -270,7 +270,7 @@ func copyDirectory(src, dst string) error {
 }
 
 // ProcessConfiguration processes configuration files for backup or restore.
-func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup bool, commands bool, versionsToKeep int, zipBackup bool) {
+func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup bool, commands bool, versionsToKeep int, zipBackup bool, password string) {
 	// Expand environment variables in paths using config package function
 	configFolder = config.ExpandEnvVars(configFolder)
 	backupFolder = config.ExpandEnvVars(backupFolder)
@@ -300,6 +300,7 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 	} else {
 		// Config folder exists, use the OS filesystem
 		AppLogger.Logf("Using config folder: %s", configFolder)
+
 		currentFS = os.DirFS(configFolder) // Create an iofs.FS from the OS path
 		configReadDir = configFolder
 		// Read directory entries from the OS filesystem folder using iofs.ReadDir
@@ -373,19 +374,20 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 		if file.IsDir() || !strings.HasSuffix(file.Name(), ".cfg") {
 			continue
 		}
-		// Runtime skip removed as per user request. Exclusion handled externally.
 		foundCfg = true // Found at least one .cfg file
 
-		// If an app name is specified, only process that app's configuration
-		if appName != "" && !strings.Contains(strings.ToLower(file.Name()), strings.ToLower(appName)) {
-			continue
+		// If an app name is specified, only process that app's configuration file.
+		// We expect the filename to be exactly appName.cfg (case-insensitive).
+		if appName != "" && strings.ToLower(file.Name()) != strings.ToLower(appName)+".cfg" {
+			continue // Skip this file if appName is given and filename doesn't match
 		}
+		// If we reach here, either appName was empty, or the filename matched.
 
 		// Parse the configuration file using the determined filesystem (currentFS)
 		// file.Name() is relative to the directory read by iofs.ReadDir
 		cfg, err := config.ParseConfig(currentFS, file.Name()) // Use config package function
 		if err != nil {
-			AppLogger.Logf("Error parsing configuration file %s from %s: %v", file.Name(), configReadDir, err)
+			AppLogger.Logf("Error parsing config file '%s': %v", file.Name(), err) // Log error properly
 			continue
 		}
 
@@ -510,7 +512,170 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 				}
 				_ = latestIsZip // Keep this for now, will be used in the next step
 			}
+			// --- Encryption Logic Start ---
+			if isBackup && password != "" {
+				err := command.SafeExecute("encryption operation", func() error {
+					// Read source file content
+					plaintext, readErr := Fs.ReadFile(configFile)
+					if os.IsNotExist(readErr) {
+						if DryRun {
+							Printer.Print("Would skip encryption of %s (doesn't exist)", configFile)
+						}
+						return nil // Not an error if source doesn't exist
+					} else if readErr != nil {
+						Printer.Print("Error reading source file %s for encryption: %v\n", configFile, readErr)
+						return readErr // Return the actual read error
+					}
 
+					// Encrypt content
+					encryptedData, encErr := encrypt(plaintext, password)
+					if encErr != nil {
+						Printer.Print("Error encrypting %s: %v", configFile, encErr)
+						return encErr // Return error to SafeExecute
+					}
+
+					// Determine encrypted target path
+					encryptedTargetPath := targetPath + ".encrypted"
+
+					if DryRun {
+						Printer.Print("Would encrypt %s to %s", configFile, encryptedTargetPath) // Log the actual .encrypted path
+						return nil
+					}
+
+					// Ensure target directory exists (either staging or final versioned)
+					if mkErr := Fs.MkdirAll(Fs.Dir(encryptedTargetPath), 0755); mkErr != nil {
+						AppLogger.Logf("Failed to create target directory '%s' for encrypted file: %v", Fs.Dir(encryptedTargetPath), mkErr)
+						return mkErr // Return error to SafeExecute
+					}
+
+					// Write encrypted data
+					if writeErr := Fs.WriteFile(encryptedTargetPath, encryptedData, 0644); writeErr != nil {
+						Printer.Print("Error writing encrypted file %s: %v", encryptedTargetPath, writeErr)
+						return writeErr // Return error to SafeExecute
+					}
+
+					Printer.Print("Encrypted %s to %s", configFile, encryptedTargetPath)
+					return nil
+				})
+
+				if err != nil {
+					// Log error from SafeExecute
+					AppLogger.Logf("Encryption operation failed for %s: %v", configFile, err)
+				}
+				// Continue to next file, skipping standard backup logic below
+				continue
+			}
+			// --- Encryption Logic End ---
+
+			// --- Decryption Logic Start ---
+			if !isBackup {
+				encryptedSourcePath := versionedBackupPath + ".encrypted"
+				encryptedSourcePathInZip := filepath.ToSlash(Fs.Join(cfg.Name, Fs.Base(configFile))) + ".encrypted" // Path inside zip
+				encryptedFileExists := false
+				var readErr error
+
+				// Check if the encrypted file exists (either directly or in zip)
+				if latestIsZip {
+					// Need to inspect zip contents without extracting everything yet
+					// TODO: Implement zip inspection helper or adjust logic
+					// For now, assume we need to try extracting and check error
+					// Check zip archive directly for the encrypted file entry
+					var zipCheckErr error
+					encryptedFileExists, zipCheckErr = zipContainsEncrypted(latestVersion, encryptedSourcePathInZip)
+					if zipCheckErr != nil {
+						AppLogger.Logf("Error checking zip archive %s for encrypted file %s: %v", latestVersion, encryptedSourcePathInZip, zipCheckErr)
+						// If we can't check the zip, we can't safely proceed with decryption attempt for this file
+						continue // Skip this file
+					}
+				} else {
+					// Check if encrypted file exists directly on filesystem
+					_, readErr = Fs.Stat(encryptedSourcePath)
+					if readErr == nil {
+						encryptedFileExists = true
+					}
+				}
+
+				if encryptedFileExists {
+					if password == "" {
+						_ = AppLogger.LogErrorf("Encrypted backup file found for '%s' but no password provided. Use -password flag.", configFile)
+						continue // Skip this file
+					}
+
+					// Proceed with decryption attempt
+					err := command.SafeExecute("decryption operation", func() error {
+						var encryptedData []byte
+						var readErr error
+
+						// Read encrypted data (from file system or zip)
+						if latestIsZip {
+							// Extract the specific encrypted file
+							// Create a temporary file to extract to?
+							tempFile, err := os.CreateTemp("", "settingssentry-decrypt-")
+							if err != nil {
+								return fmt.Errorf("failed to create temp file for zip extraction: %w", err)
+							}
+							tempFilePath := tempFile.Name()
+							tempFile.Close()              // Close immediately, extractFromZip will reopen/write
+							defer os.Remove(tempFilePath) // Clean up temp file
+
+							// Use encryptedSourcePathInZip (relative path inside zip)
+							err = extractFromZip(latestVersion, encryptedSourcePathInZip, tempFilePath)
+							if err != nil {
+								// If extraction failed, maybe the encrypted file wasn't actually there
+								Printer.Print("Info: Encrypted file %s not found in zip archive %s.", encryptedSourcePathInZip, latestVersion)
+								return nil // Treat as non-fatal, effectively skipping
+							}
+							encryptedData, readErr = os.ReadFile(tempFilePath)
+						} else {
+							encryptedData, readErr = Fs.ReadFile(encryptedSourcePath)
+						}
+
+						if readErr != nil {
+							// This might happen if Stat passed but ReadFile failed, or if zip extract failed
+							Printer.Print("Error reading encrypted file %s: %v", encryptedSourcePath, readErr)
+							return nil // Treat as non-fatal for this file
+						}
+
+						// Decrypt data
+						plaintext, decErr := decrypt(encryptedData, password)
+						if decErr != nil {
+							// Log specific error but return a generic one to SafeExecute if needed
+							Printer.Print("Error decrypting %s: %v (Wrong password or corrupt data?)", encryptedSourcePath, decErr)
+							return fmt.Errorf("decryption failed") // Return generic error
+						}
+
+						// Write decrypted data to final destination
+						if DryRun {
+							Printer.Print("Would restore (decrypted) %s to %s", encryptedSourcePath, configFile)
+							return nil
+						}
+
+						// Ensure destination directory exists
+						if mkErr := Fs.MkdirAll(Fs.Dir(configFile), 0755); mkErr != nil {
+							Printer.Print("Error creating destination directory '%s': %v", Fs.Dir(configFile), mkErr)
+							return mkErr
+						}
+
+						if writeErr := Fs.WriteFile(configFile, plaintext, 0644); writeErr != nil {
+							Printer.Print("Error writing decrypted file %s: %v", configFile, writeErr)
+							return writeErr
+						}
+
+						Printer.Print("Restored (decrypted) %s to %s", encryptedSourcePath, configFile)
+						return nil
+					})
+
+					if err != nil {
+						// Log error from SafeExecute (already logged specific decrypt error)
+						AppLogger.Logf("Decryption/Restore operation failed for %s: %v", configFile, err)
+					}
+					// Continue to next file, skipping standard restore logic below
+					continue
+				}
+			}
+			// --- Decryption Logic End ---
+
+			// --- Standard Backup/Restore (if not handled by encryption/decryption) ---
 			if isBackup {
 				// Backup operation with recovery
 				err := command.SafeExecute("backup operation", func() error {
@@ -523,7 +688,7 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 						return nil // Not an error if source doesn't exist
 					} else if err != nil {
 						Printer.Print("Error accessing %s: %v\n", configFile, err)
-						return nil // Treat as non-fatal for this file
+						return err // Return the actual stat error
 					}
 
 					// In dry-run mode, just show what would be backed up
@@ -615,7 +780,7 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 					AppLogger.Logf("Restore operation failed for %s: %v", configFile, err)
 				}
 			}
-		}
+		} // End loop through cfg.Files
 
 		if !isBackup && commands {
 			// Pre-restore commands
@@ -651,7 +816,7 @@ func ProcessConfiguration(configFolder, backupFolder, appName string, isBackup b
 				}
 			}
 		}
-	}
+	} // End loop through config files
 
 	// Create zip archive from staging directory if zipBackup is enabled
 	if isBackup && zipBackup {
@@ -770,6 +935,34 @@ func createZipArchive(sourceDir, targetZipPath string) error {
 	}
 
 	return nil
+}
+
+// zipContainsEncrypted checks if a zip archive contains a specific entry.
+func zipContainsEncrypted(zipPath, internalEncryptedPath string) (bool, error) {
+	// Normalize internal path
+	internalEncryptedPath = filepath.ToSlash(internalEncryptedPath)
+
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		// If zip doesn't exist or is invalid, the encrypted file isn't there
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to open zip archive '%s' for inspection: %w", zipPath, err)
+	}
+	defer func() {
+		if err := r.Close(); err != nil {
+			AppLogger.Logf("Error closing zip reader for inspection %s: %v", zipPath, err)
+		}
+	}()
+
+	for _, f := range r.File {
+		if f.Name == internalEncryptedPath {
+			return true, nil // Found it
+		}
+	}
+
+	return false, nil // Not found
 }
 
 // extractFromZip extracts a specific file or directory from a zip archive to a destination path.
