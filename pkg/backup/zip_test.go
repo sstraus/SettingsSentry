@@ -392,7 +392,7 @@ name = MyZipApp
 	createDummyFile(t, cfgPath, cfgContent)
 
 	// --- Perform Zip Backup ---
-	ProcessConfiguration(configDir, backupDir, "", true, false, 1, true, "") // zipBackup = true, password=""
+	ProcessConfiguration(configDir, backupDir, nil, true, false, 1, true, "") // zipBackup = true, password="", appNames=nil
 
 	// --- Verification ---
 	// Find the created zip file (should be only one entry)
@@ -481,7 +481,7 @@ name = %s
 
 	// --- Perform Restore ---
 	// We pass zipBackup=false because restore determines type automatically
-	ProcessConfiguration(configDir, backupDir, "", false, false, 1, false, "") // password=""
+	ProcessConfiguration(configDir, backupDir, nil, false, false, 1, false, "") // password="", appNames=nil
 
 	// --- Verification ---
 	// Check if the file was restored to the correct destination

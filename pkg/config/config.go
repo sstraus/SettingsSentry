@@ -17,7 +17,6 @@ var (
 	Fs        interfaces.FileSystem
 )
 
-// Allow mocking
 var GetHomeDirectory = func() (string, error) {
 	homeDir := os.Getenv("HOME")
 	if homeDir == "" {
@@ -43,13 +42,10 @@ func GetXDGConfigHome() (string, error) {
 
 	xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
 	if xdgConfigHome == "" {
-		// Default to ~/.config if not set
 		xdgConfigHome = filepath.Join(homeDir, ".config")
 	}
 
-	// Ensure XDG_CONFIG_HOME is within the home directory
 	if !strings.HasPrefix(xdgConfigHome, homeDir) {
-		// Use AppLogger if available, otherwise return plain error
 		if AppLogger != nil {
 			return "", AppLogger.LogErrorf("$XDG_CONFIG_HOME: %s must be somewhere within your home directory: %s", xdgConfigHome, homeDir)
 		}
@@ -68,7 +64,6 @@ func GetICloudFolderLocation() (string, error) {
 		return "", err
 	}
 
-	// The iCloud Drive folder is typically located at ~/Library/Mobile Documents/com~apple~CloudDocs/
 	iCloudPath := Fs.Join(homeDir, "Library", "Mobile Documents", "com~apple~CloudDocs")
 
 	_, err = Fs.Stat(iCloudPath)
@@ -90,9 +85,7 @@ func GetICloudFolderLocation() (string, error) {
 	return resolvedPath, nil
 }
 
-// Format: ${ENV_VAR} or $ENV_VAR
 func ExpandEnvVars(value string) string {
-	// Replace ${VAR} format
 	result := os.Expand(value, func(key string) string {
 		return os.Getenv(key)
 	})
@@ -127,9 +120,7 @@ func ValidateConfig(config Config) error {
 			}
 
 			expandedPath := strings.Replace(file, "~", homeDir, 1)
-			// We don't check if the file exists here because it might not exist yet for restore operations
 			if strings.Contains(expandedPath, "*") || strings.Contains(expandedPath, "?") {
-				// Check if the pattern is valid (contains directory that exists)
 				dir := filepath.Dir(expandedPath)
 				if _, err := Fs.Stat(dir); err != nil {
 					if AppLogger != nil {
@@ -144,7 +135,6 @@ func ValidateConfig(config Config) error {
 	return nil
 }
 
-// Accepts an iofs.FS to allow reading from OS or embedded filesystems.
 func ParseConfig(filesystem iofs.FS, filePath string) (Config, error) {
 	var config Config
 
@@ -171,7 +161,6 @@ func ParseConfig(filesystem iofs.FS, filePath string) (Config, error) {
 			continue
 		}
 
-		// Handle "name = value" format for application section
 		if strings.Contains(line, "=") {
 			parts := strings.SplitN(line, "=", 2)
 			key := strings.TrimSpace(strings.ToLower(parts[0]))
@@ -189,13 +178,11 @@ func ParseConfig(filesystem iofs.FS, filePath string) (Config, error) {
 		case "app":
 			config.Name = ExpandEnvVars(line)
 		case "application":
-			// Already handled above for "name = value" format
 			if !strings.Contains(line, "=") {
 				config.Name = ExpandEnvVars(line)
 			}
 		case "files", "configuration_files":
 			config.Files = append(config.Files, ExpandEnvVars(line))
-			fmt.Printf("[DEBUG ParseConfig] Adding file: %s (Section: %s)\n", line, section)
 
 		case "xdg_configuration_files":
 			path := ExpandEnvVars(line)
@@ -216,7 +203,6 @@ func ParseConfig(filesystem iofs.FS, filePath string) (Config, error) {
 
 			fullPath := filepath.Join(xdgConfigHome, path)
 
-			// Make path relative to home directory
 			homeDir, err := GetHomeDirectory()
 			if err != nil {
 				if AppLogger != nil {
@@ -247,13 +233,11 @@ func ParseConfig(filesystem iofs.FS, filePath string) (Config, error) {
 	}
 
 	if validationErr := ValidateConfig(config); validationErr != nil {
-		// Log the specific validation error
 		detailedError := fmt.Errorf("invalid configuration in '%s': %w", filePath, validationErr)
 		if AppLogger != nil {
-			// LogErrorf already returns an error, just return it
-			return config, AppLogger.LogErrorf(detailedError.Error()) // Log the detailed error
+			return config, AppLogger.LogErrorf(detailedError.Error())
 		}
-		return config, detailedError // Return the detailed error
+		return config, detailedError
 	}
 
 	return config, nil

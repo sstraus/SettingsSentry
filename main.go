@@ -23,18 +23,14 @@ var embeddedConfigsFiles embed.FS
 
 var (
 	appLogger *logger.Logger = &logger.Logger{}
-	// Version is the application version, typically set via build flags.
-	Version string = "1.1.7"
+	Version   string         = "1.1.7"
 )
 
 func main() {
-	// Parse command-line flags first to get the logFilePath
 	logFilePath := flag.String("logfile", "", "Optional: Path to log file. If provided, logs will be written to this file in addition to console output")
 
-	// We need to do a preliminary parse to get the logFilePath
-	flag.Parse()
+	flag.Parse() // Preliminary parse for log file path
 
-	// Initialize the logger properly
 	var err error
 	appLogger, err = logger.NewLogger(*logFilePath)
 	if err != nil {
@@ -44,7 +40,6 @@ func main() {
 	config.AppLogger = appLogger
 	backup.AppLogger = appLogger
 
-	// Add panic recovery for the main function
 	defer func() {
 		if r := recover(); r != nil {
 			appLogger.Logf("Panic recovered in main: %v\nStack trace: %s", r, string(debug.Stack()))
@@ -52,20 +47,17 @@ func main() {
 		}
 	}()
 
-	appLogger.Logf("SettingsSentry v%s", Version) // Use package-level Version
+	appLogger.Logf("SettingsSentry v%s", Version)
 
-	// Initialize dependencies
 	osFs := interfaces.NewOsFileSystem()
 	osCmdExecutor := interfaces.NewOsCommandExecutor()
 
-	// Initialize globals in util package and dependent packages
-	util.InitGlobals(appLogger, osFs, osCmdExecutor, false) // Removed Version argument
+	util.InitGlobals(appLogger, osFs, osCmdExecutor, false)
 
-	// Manually set dependencies in other packages
 	config.Fs = util.Fs
 	backup.Fs = util.Fs
 	command.CmdExecutor = util.CmdExecutor
-	printer.AppLogger = util.AppLogger // Printer needs logger
+	printer.AppLogger = util.AppLogger
 
 	var icloud_path string
 	icloud_path, err = config.GetICloudFolderLocation()
@@ -74,7 +66,6 @@ func main() {
 	} else {
 		icloud_path = filepath.Join(icloud_path, "settingssentry_backups")
 	}
-	// Handle case where iCloud path failed but we might still proceed
 	if icloud_path == "" {
 		homeDir, homeErr := config.GetHomeDirectory()
 		if homeErr == nil {
@@ -88,43 +79,43 @@ func main() {
 
 	envConfigFolder := util.GetEnvWithDefault("SETTINGSSENTRY_CONFIG", "configs")
 	envBackupFolder := util.GetEnvWithDefault("SETTINGSSENTRY_BACKUP", icloud_path)
-	envAppName := os.Getenv("SETTINGSSENTRY_APP")
+	envAppName := os.Getenv("SETTINGSSENTRY_APP") // Keep reading single string from env
 	envCommands := os.Getenv("SETTINGSSENTRY_COMMANDS") == "true"
 	envDryRun := os.Getenv("SETTINGSSENTRY_DRY_RUN") == "true"
 	envZip := os.Getenv("SETTINGSSENTRY_ZIP") == "true"
-	envPassword := os.Getenv("SETTINGSSENTRY_PASSWORD") // Read password from env
+	envPassword := os.Getenv("SETTINGSSENTRY_PASSWORD")
 
-	// Define shared command-line flags with environment variable defaults
+	// Define flags
 	configFolder := flag.String("config", envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
 	backupFolder := flag.String("backup", envBackupFolder, "Path to the backup folder (env: SETTINGSSENTRY_BACKUP)")
-	appName := flag.String("app", envAppName, "Optional: Name of the application to process (env: SETTINGSSENTRY_APP)")
+	// Keep appName as string flag, will split later
+	appNameFlag := flag.String("app", envAppName, "Optional: Comma-separated list of application names to process (env: SETTINGSSENTRY_APP)")
 	commands := flag.Bool("commands", envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
 	dryRunFlag := flag.Bool("dry-run", envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
 	versionsToKeep := flag.Int("versions", 1, "Number of backup versions to keep")
 	password := flag.String("password", envPassword, "Optional: Password to encrypt/decrypt backups (env: SETTINGSSENTRY_PASSWORD)")
-
 	zipFlag := flag.Bool("zip", envZip, "Optional: Create backup as a zip archive instead of a directory (env: SETTINGSSENTRY_ZIP)")
 
-	// Define a function to display help information
 	showHelp := func() {
-		appLogger.Logf("Usage: SettingsSentry <action> [-config=<path>] [-backup=<path>] [-app=<n>] [-commands] [-logfile=<path>] [-dry-run]")
-		appLogger.Logf("") // Add spacing
+		// Update usage string to reflect comma-separated apps
+		appLogger.Logf("Usage: SettingsSentry <action> [-config=<path>] [-backup=<path>] [-app=<app1,app2,...>] [-commands] [-logfile=<path>] [-dry-run]")
+		appLogger.Logf("")
 		appLogger.Logf("Actions:")
 		appLogger.Logf("  backup      - Backup configuration files to the specified backup folder")
 		appLogger.Logf("  restore     - Restore the files to their original locations")
 		appLogger.Logf("  configsinit - Extract embedded default configs to a 'configs' directory next to the executable")
 		appLogger.Logf("  install     - Install the application as a CRON job that runs at every reboot (you can also provide a valid cron expression as parameter)")
 		appLogger.Logf("  remove      - Remove the previously installed CRON job")
-		appLogger.Logf("") // Add spacing
+		appLogger.Logf("")
 		appLogger.Logf("Use -logfile=<path> to enable logging to a file. This will write logs to the specified file in addition to console output.")
 		appLogger.Logf("If -logfile is not provided, logs will only be written to the console.")
-		appLogger.Logf("") // Add spacing
+		appLogger.Logf("")
 		appLogger.Logf("Default values:")
 		appLogger.Logf("  Configurations: %s", envConfigFolder)
 		appLogger.Logf("  Backups: %s", envBackupFolder)
-		appLogger.Logf("") // Add spacing
+		appLogger.Logf("")
 		appLogger.Logf("Documentation available at https://github.com/sstraus/SettingsSentry")
-		appLogger.Logf("") // Add spacing
+		appLogger.Logf("")
 
 		installed, err := cronjob.IsCronJobInstalled()
 		if err != nil {
@@ -137,30 +128,57 @@ func main() {
 		}
 	}
 
-	// Override the default flag.Usage function to use our custom help
 	flag.Usage = showHelp
 
-	// Check if no arguments or -h flag is provided
-	if len(os.Args) < 2 || (len(os.Args) == 2 && (os.Args[1] == "-h" || os.Args[1] == "--help")) {
+	// Re-parse flags after defining them all
+	// Note: We already did a preliminary parse for logFilePath
+	// We need to parse the *remaining* arguments after the action
+	if len(os.Args) < 2 {
+		showHelp()
+		return
+	}
+	action := os.Args[1] // Action is the first argument
+
+	// Parse flags specifically for the current action
+	actionFlags := flag.NewFlagSet(action, flag.ExitOnError)
+	// Redefine flags for this specific flag set
+	configFolder = actionFlags.String("config", envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
+	backupFolder = actionFlags.String("backup", envBackupFolder, "Path to the backup folder (env: SETTINGSSENTRY_BACKUP)")
+	appNameFlag = actionFlags.String("app", envAppName, "Optional: Comma-separated list of application names to process (env: SETTINGSSENTRY_APP)")
+	commands = actionFlags.Bool("commands", envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
+	dryRunFlag = actionFlags.Bool("dry-run", envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
+	versionsToKeep = actionFlags.Int("versions", 1, "Number of backup versions to keep")
+	password = actionFlags.String("password", envPassword, "Optional: Password to encrypt/decrypt backups (env: SETTINGSSENTRY_PASSWORD)")
+	zipFlag = actionFlags.Bool("zip", envZip, "Optional: Create backup as a zip archive instead of a directory (env: SETTINGSSENTRY_ZIP)")
+	// Add logFilePath flag to this set as well, although it was parsed earlier
+	_ = actionFlags.String("logfile", *logFilePath, "Optional: Path to log file.")
+
+	// Parse arguments starting from the one after the action
+	if err := actionFlags.Parse(os.Args[2:]); err != nil {
+		appLogger.Logf("Error parsing flags for action '%s': %v\n", action, err)
+		// Show help specific to the action? Or general help? General for now.
 		showHelp()
 		return
 	}
 
-	// Check if the second argument is -h or --help
-	if len(os.Args) >= 3 && (os.Args[2] == "-h" || os.Args[2] == "--help") {
+	// Handle -h/--help after parsing action flags
+	if *appNameFlag == "-h" || *appNameFlag == "--help" { // Simple check if help flag was mistakenly passed as app name
 		showHelp()
 		return
 	}
 
-	// Parse flags for custom handling based on the specified action
-	if err := flag.CommandLine.Parse(os.Args[2:]); err != nil {
-		appLogger.Logf("Error parsing flags: %v\n", err)
-		return
-	}
 	util.DryRun = *dryRunFlag
 	backup.DryRun = util.DryRun
 
-	action := os.Args[1]
+	// Split the appNameFlag string into a slice
+	var appNames []string
+	if *appNameFlag != "" {
+		appNames = strings.Split(*appNameFlag, ",")
+		// Trim whitespace from each app name
+		for i := range appNames {
+			appNames[i] = strings.TrimSpace(appNames[i])
+		}
+	}
 
 	mainPrinter := printer.NewPrinter("", appLogger)
 	backup.Printer = mainPrinter
@@ -168,12 +186,11 @@ func main() {
 
 	switch action {
 	case "backup":
-		// Pass the zip flag and password value to ProcessConfiguration
-		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, true, *commands, *versionsToKeep, *zipFlag, *password)
+		// Pass the appNames slice
+		backup.ProcessConfiguration(*configFolder, *backupFolder, appNames, true, *commands, *versionsToKeep, *zipFlag, *password)
 	case "restore":
-		// Pass false for zipBackup during restore, as it's determined by the found backup
-		// Pass password for potential decryption
-		backup.ProcessConfiguration(*configFolder, *backupFolder, *appName, false, *commands, *versionsToKeep, false, *password)
+		// Pass the appNames slice
+		backup.ProcessConfiguration(*configFolder, *backupFolder, appNames, false, *commands, *versionsToKeep, false, *password)
 	case "configsinit":
 		err := util.ExtractEmbeddedConfigs(embeddedConfigsFiles)
 		if err != nil {
@@ -182,8 +199,10 @@ func main() {
 		}
 	case "install":
 		cronExpression := ""
-		if len(os.Args) > 2 && !strings.HasPrefix(os.Args[2], "-") {
-			cronExpression = os.Args[2]
+		// Check remaining non-flag arguments for cron expression
+		nonFlagArgs := actionFlags.Args()
+		if len(nonFlagArgs) > 0 {
+			cronExpression = nonFlagArgs[0]
 		}
 		err := cronjob.InstallCronJob(cronExpression)
 		if err != nil {

@@ -19,16 +19,16 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 
 ## Why use SettingsSentry instead of Mackup?
 
-- ✅ Full compatibility with macOS Sonoma and future versions  
-- ✅ No risk of overwriting your settings via symlinks  
-- ✅ Dry-run support to preview operations  
-- ✅ Cron integration for automated syncing  
-- ✅ Backup and restore of macOS preferences  
-- ✅ Support for environment variables in configuration paths and values  
-- ✅ Configuration validation to ensure all required fields are present  
-- ✅ Versioned backups with timestamp-based directories  
-- ✅ Dry-run mode to preview operations without making changes  
-- ✅ Optional ZIP archive backup format (`-zip` flag)  
+- ✅ Full compatibility with macOS Sonoma and future versions
+- ✅ No risk of overwriting your settings via symlinks
+- ✅ Dry-run support to preview operations
+- ✅ Cron integration for automated syncing
+- ✅ Backup and restore of macOS preferences
+- ✅ Support for environment variables in configuration paths and values
+- ✅ Configuration validation to ensure all required fields are present
+- ✅ Versioned backups with timestamp-based directories
+- ✅ Dry-run mode to preview operations without making changes
+- ✅ Optional ZIP archive backup format (`-zip` flag)
 
 
 ## Features
@@ -46,7 +46,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 
 ## Usage
 
-./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<n>`] [-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`] [-password=<pwd>] [-zip]
+./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=<app1,app2,...>] [-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`] [-password=<pwd>] [-zip]
 
 ### Actions
 
@@ -68,7 +68,7 @@ Backups: iCloud Drive/settingssentry_backups
 
 - `-backup` `<path>`: Path to the backup folder (default: `iCloud Drive/settingssentry_backups`).
 
-- `-app` `<n>`: Optional name of the application to process.
+- `-app` `<app1,app2,...>`: Optional: Comma-separated list of application names to process.
 
 - `-commands`: Executes pre and post commands during backup or restore where available.
 
@@ -88,7 +88,7 @@ SettingsSentry supports the following environment variables:
 
 - `SETTINGSSENTRY_CONFIG`: Path to the configuration folder.
 - `SETTINGSSENTRY_BACKUP`: Path to the backup folder.
-- `SETTINGSSENTRY_APP`: Optional name of the application to process.
+- `SETTINGSSENTRY_APP`: Optional: Comma-separated list of application names to process.
 - `SETTINGSSENTRY_COMMANDS`: Set to 'true' to perform command execution during backup or restore.
 - `SETTINGSSENTRY_DRY_RUN`: Set to 'true' to perform a dry run without making any changes.
 - `SETTINGSSENTRY_PASSWORD`: Password for encryption/decryption (alternative to `-password` flag).

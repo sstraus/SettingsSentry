@@ -6,20 +6,16 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"fmt"
-	"io" // Needed for rand.Read
+	"io"
 
 	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
-	// Salt size in bytes
-	saltSize = 16
-	// Nonce size for AES-GCM (standard size)
-	nonceSize = 12
-	// PBKDF2 iteration count (adjust as needed, higher is more secure but slower)
-	pbkdf2Iterations = 600000 // Increased iteration count
-	// Key size for AES-256
-	aesKeySize = 32
+	saltSize         = 16
+	nonceSize        = 12
+	pbkdf2Iterations = 600000
+	aesKeySize       = 32
 )
 
 // encrypt encrypts plaintext using AES-GCM with a key derived from the password via PBKDF2.
@@ -51,9 +47,7 @@ func encrypt(plaintext []byte, password string) ([]byte, error) {
 	}
 
 	// 5. Generate random nonce
-	// Nonce size must be standard for GCM
 	if gcm.NonceSize() != nonceSize {
-		// This should ideally not happen with standard Go crypto/cipher
 		return nil, fmt.Errorf("unexpected GCM nonce size: expected %d, got %d", nonceSize, gcm.NonceSize())
 	}
 	nonce := make([]byte, nonceSize)

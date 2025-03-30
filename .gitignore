@@ -18,3 +18,4 @@ configs/TestCommand.cfg
 .gitignore
 memory-bank/
 
+.qodo
