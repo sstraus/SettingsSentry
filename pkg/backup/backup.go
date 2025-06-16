@@ -884,11 +884,25 @@ func extractFromZip(zipPath, entryPath, destinationPath string) error {
 			} else {
 				relPath := strings.TrimPrefix(f.Name, entryPath+"/")
 				extractPath = filepath.Join(destinationPath, relPath)
+
+				// Validate extractPath to prevent directory traversal
+				cleanExtractPath := filepath.Clean(extractPath)
+				absExtractPath, err := filepath.Abs(cleanExtractPath)
+				if err != nil {
+					return fmt.Errorf("failed to resolve absolute path for '%s': %w", cleanExtractPath, err)
+				}
+				absDestinationPath, err := filepath.Abs(destinationPath)
+				if err != nil {
+					return fmt.Errorf("failed to resolve absolute path for destination '%s': %w", destinationPath, err)
+				}
+				if !strings.HasPrefix(absExtractPath, absDestinationPath) {
+					return fmt.Errorf("invalid file path '%s': outside of destination '%s'", absExtractPath, absDestinationPath)
+				}
 			}
 
 			if f.FileInfo().IsDir() {
-				if err := os.MkdirAll(extractPath, f.Mode()); err != nil {
-					return fmt.Errorf("failed to create directory '%s': %w", extractPath, err)
+				if err := os.MkdirAll(cleanExtractPath, f.Mode()); err != nil {
+					return fmt.Errorf("failed to create directory '%s': %w", cleanExtractPath, err)
 				}
 				continue
 			}
