@@ -1,10 +1,11 @@
 package command
 
 import (
-	// Keep logger import if needed elsewhere, otherwise remove
+	"SettingsSentry/interfaces"
 	"SettingsSentry/pkg/printer"
 	"SettingsSentry/pkg/testutil" // Added testutil
 	"errors"
+	"io"
 	"testing"
 )
 
@@ -44,5 +45,125 @@ func TestSafeExecute(t *testing.T) {
 	if err != nil {
 		t.Errorf("Expected no error after panic recovery, got: %v", err)
 	}
+}
 
+func TestExecuteCommandLine_Success(t *testing.T) {
+	setupTestDependencies()
+
+	// Mock command executor that always succeeds
+	mockExecutor := &MockCommandExecutor{shouldSucceed: true}
+	CmdExecutor = mockExecutor
+
+	result := ExecuteCommandLine("echo test")
+	if !result {
+		t.Error("ExecuteCommandLine should return true for successful command")
+	}
+
+	if !mockExecutor.called {
+		t.Error("Command executor should have been called")
+	}
+}
+
+func TestExecuteCommandLine_Failure(t *testing.T) {
+	setupTestDependencies()
+
+	// Mock command executor that always fails
+	mockExecutor := &MockCommandExecutor{shouldSucceed: false}
+	CmdExecutor = mockExecutor
+
+	result := ExecuteCommandLine("failing command")
+	if result {
+		t.Error("ExecuteCommandLine should return false for failed command")
+	}
+}
+
+func TestExecuteCommandLine_EmptyCommand(t *testing.T) {
+	setupTestDependencies()
+
+	mockExecutor := &MockCommandExecutor{shouldSucceed: true}
+	CmdExecutor = mockExecutor
+
+	result := ExecuteCommandLine("")
+	if !result {
+		t.Error("ExecuteCommandLine should return true for empty command")
+	}
+
+	if mockExecutor.called {
+		t.Error("Command executor should not be called for empty command")
+	}
+}
+
+func TestExecuteCommandLine_NilExecutor(t *testing.T) {
+	setupTestDependencies()
+
+	CmdExecutor = nil
+
+	result := ExecuteCommandLine("test command")
+	if result {
+		t.Error("ExecuteCommandLine should return false when executor is nil")
+	}
+}
+
+func TestExecuteCommandLine_WithCallbacks(t *testing.T) {
+	setupTestDependencies()
+
+	mockExecutor := &MockCommandExecutor{
+		shouldSucceed: true,
+		stdoutLines:   []string{"output line 1", "output line 2"},
+		stderrLines:   []string{"error line 1"},
+	}
+	CmdExecutor = mockExecutor
+
+	result := ExecuteCommandLine("test command")
+	if !result {
+		t.Error("ExecuteCommandLine should return true for successful command")
+	}
+}
+
+func TestExecuteCommandLine_NoPrinter(t *testing.T) {
+	setupTestDependencies()
+
+	// Set Printer to nil
+	Printer = nil
+	mockExecutor := &MockCommandExecutor{shouldSucceed: true}
+	CmdExecutor = mockExecutor
+
+	// Should not panic
+	result := ExecuteCommandLine("test command")
+	if !result {
+		t.Error("ExecuteCommandLine should work without Printer")
+	}
+}
+
+// MockCommandExecutor for testing
+type MockCommandExecutor struct {
+	shouldSucceed bool
+	called        bool
+	stdoutLines   []string
+	stderrLines   []string
+}
+
+func (m *MockCommandExecutor) Execute(commandLine string, stdout, stderr io.Writer) bool {
+	m.called = true
+	return m.shouldSucceed
+}
+
+func (m *MockCommandExecutor) ExecuteWithCallback(commandLine string, stdoutHandler, stderrHandler interfaces.OutputHandler) bool {
+	m.called = true
+	
+	// Simulate stdout output
+	for _, line := range m.stdoutLines {
+		if stdoutHandler != nil {
+			stdoutHandler(line)
+		}
+	}
+	
+	// Simulate stderr output
+	for _, line := range m.stderrLines {
+		if stderrHandler != nil {
+			stderrHandler(line)
+		}
+	}
+	
+	return m.shouldSucceed
 }
