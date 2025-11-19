@@ -156,6 +156,28 @@ go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
 
+#### Current Coverage Statistics
+
+**Overall Coverage: 46.3%** (after refactoring for testability)
+
+Coverage by package:
+- `logger`: 93.8% ✅
+- `cron`: 89.9% ✅
+- `interfaces`: 84.6% ✅
+- `command`: 83.9% ✅
+- `printer`: 80.0% ✅
+- `config`: 73.7% 🟡
+- `util`: 55.6% 🟡
+- `backup`: 49.9% 🟡
+- `main`: 0.0% 🔴 (refactored for testability, tests to be added)
+
+**Note**: The main package was recently refactored to improve testability by:
+- Extracting CLI logic into `main_cli.go` with testable methods
+- Converting `main()` to use `run()` function that returns errors
+- Creating `BackupContext` in `pkg/backup/backup_operations.go` for dependency injection
+
+These refactorings enable comprehensive testing and are targeted to achieve 80%+ coverage in the next phase.
+
 ## Linting
 
 To run the linter:

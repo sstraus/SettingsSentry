@@ -9,7 +9,6 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
-	iofs "io/fs" // Use alias for standard io/fs
 	"os"
 	"path/filepath"
 	"sort"
@@ -243,112 +242,46 @@ func copyDirectory(src, dst string) error {
 // ProcessConfiguration processes configuration files for backup or restore.
 // Accepts a slice of app names to process specific applications.
 func ProcessConfiguration(configFolder, backupFolder string, appNames []string, isBackup bool, commands bool, versionsToKeep int, zipBackup bool, password string) {
-	configFolder = config.ExpandEnvVars(configFolder)
-	backupFolder = config.ExpandEnvVars(backupFolder)
-
-	if !strings.Contains(configFolder, string(os.PathSeparator)) {
-		exePath, err := os.Executable()
-		if err != nil {
-			AppLogger.Logf("Error getting executable path: %v", err)
-			return
-		}
-		configFolder = Fs.Join(Fs.Dir(exePath), configFolder)
-	}
-
-	var currentFS iofs.FS
-	var files []iofs.DirEntry
-	var configReadDir string
-
-	_, err := Fs.Stat(configFolder)
+	// Create backup context
+	ctx, err := NewBackupContext(configFolder, backupFolder, appNames, isBackup, commands, versionsToKeep, zipBackup, password)
 	if err != nil {
-		AppLogger.Logf("Config folder '%s' not found or inaccessible: %v. Attempting to use embedded configs.", configFolder, err)
-		AppLogger.Logf("Error: Embedded fallback logic needs rootEmbedFS passed.")
-		return
-
-	} else {
-		AppLogger.Logf("Using config folder: %s", configFolder)
-
-		currentFS = os.DirFS(configFolder)
-		configReadDir = configFolder
-		files, err = iofs.ReadDir(currentFS, ".")
-		if err != nil {
-			AppLogger.Logf("Error reading config folder '%s': %v", configFolder, err)
-			return
-		}
-		if len(files) == 0 {
-			AppLogger.Logf("No configuration files found in '%s'.", configFolder)
-			return
-		}
-	}
-
-	if isBackup {
-		if DryRun {
-			AppLogger.Logf("Would create backup folder: %s", backupFolder)
-		} else {
-			err = Fs.MkdirAll(backupFolder, 0755)
-			if err != nil {
-				AppLogger.Logf("Failed to create backup folder: %v", err)
-				return
-			}
-		}
-	} else {
-		_, err := Fs.Stat(backupFolder)
-		if err != nil {
-			AppLogger.Logf("Backup folder does not exist or is not accessible: %v", err)
-			return
-		}
-	}
-
-	homeDir, err := config.GetHomeDirectory()
-	if err != nil {
-		AppLogger.Logf("Error getting home directory: %v", err)
+		AppLogger.Logf("Error creating backup context: %v", err)
 		return
 	}
 
-	var stagingDir string
+	// Setup backup directory
+	if err := ctx.SetupBackupDirectory(); err != nil {
+		AppLogger.Logf("Error setting up backup directory: %v", err)
+		return
+	}
 
-	timestamp := time.Now().Format("20060102-150405")
-
-	if isBackup && zipBackup {
-		var tempErr error
-		stagingDir, tempErr = os.MkdirTemp("", "settingssentry-zip-")
-		if tempErr != nil {
-			_ = AppLogger.LogErrorf("Failed to create temporary staging directory: %v", tempErr)
-			return
-		}
-		AppLogger.Logf("Using staging directory for zip backup: %s", stagingDir)
+	// Cleanup staging directory if created
+	if ctx.StagingDir != "" {
 		defer func() {
-			if stagingDir != "" {
-				AppLogger.Logf("Cleaning up staging directory: %s", stagingDir)
-				if err := Fs.RemoveAll(stagingDir); err != nil {
-					AppLogger.Logf("Error removing staging directory %s: %v", stagingDir, err)
-				}
+			AppLogger.Logf("Cleaning up staging directory: %s", ctx.StagingDir)
+			if err := Fs.RemoveAll(ctx.StagingDir); err != nil {
+				AppLogger.Logf("Error removing staging directory %s: %v", ctx.StagingDir, err)
 			}
 		}()
 	}
 
+	// Load config files
+	currentFS, files, err := ctx.LoadConfigFiles()
+	if err != nil {
+		AppLogger.Logf("%v", err)
+		return
+	}
+
+	configReadDir := ctx.ConfigFolder
+
+	// Filter config files based on app names
+	filteredFiles := ctx.FilterConfigFiles(files)
+	
 	foundCfg := false
-	for _, file := range files {
+	for _, file := range filteredFiles {
 		if file.IsDir() || !strings.HasSuffix(file.Name(), ".cfg") {
 			continue
 		}
-
-		// Filter based on appNames slice if it's provided
-		if len(appNames) > 0 {
-			matchFound := false
-			currentFileNameLower := strings.ToLower(file.Name())
-			for _, requestedAppName := range appNames {
-				// Check if current file matches AppName.cfg (case-insensitive)
-				if currentFileNameLower == strings.ToLower(requestedAppName)+".cfg" {
-					matchFound = true
-					break
-				}
-			}
-			if !matchFound {
-				continue // Skip this file if no matching app name was found
-			}
-		}
-		// If we reach here, either appNames was empty, or a match was found.
 		foundCfg = true
 
 		cfg, err := config.ParseConfig(currentFS, file.Name())
@@ -435,13 +368,7 @@ func ProcessConfiguration(configFolder, backupFolder string, appNames []string, 
 		}
 
 		for _, configFile := range cfg.Files {
-			if strings.HasPrefix(configFile, "~/") {
-				configFile = Fs.Join(homeDir, configFile[2:])
-			} else if !strings.HasPrefix(configFile, "/") && !strings.HasPrefix(configFile, ".") {
-				configFile = Fs.Join(homeDir, configFile)
-			} else if strings.HasPrefix(configFile, ".") {
-				configFile = Fs.Join(homeDir, configFile)
-			}
+			configFile = ctx.ResolveConfigFilePath(configFile)
 
 			var versionedBackupPath string
 			var latestVersion string
@@ -449,12 +376,12 @@ func ProcessConfiguration(configFolder, backupFolder string, appNames []string, 
 
 			var latestIsZip bool
 
-			if isBackup {
-				latestIsZip = zipBackup
-				if zipBackup {
-					targetPath = Fs.Join(stagingDir, cfg.Name, Fs.Base(configFile))
+			if ctx.IsBackup {
+				latestIsZip = ctx.ZipBackup
+				if ctx.ZipBackup {
+					targetPath = Fs.Join(ctx.StagingDir, cfg.Name, Fs.Base(configFile))
 				} else {
-					targetPath = Fs.Join(backupFolder, timestamp, cfg.Name, Fs.Base(configFile))
+					targetPath = Fs.Join(ctx.BackupFolder, ctx.Timestamp, cfg.Name, Fs.Base(configFile))
 				}
 				versionedBackupPath = targetPath
 
@@ -467,9 +394,9 @@ func ProcessConfiguration(configFolder, backupFolder string, appNames []string, 
 				}
 
 				if DryRun {
-					finalDirForLog := Fs.Dir(Fs.Join(backupFolder, timestamp, cfg.Name, Fs.Base(configFile)))
-					if zipBackup {
-						finalDirForLog = Fs.Dir(Fs.Join(stagingDir, cfg.Name, Fs.Base(configFile)))
+					finalDirForLog := Fs.Dir(Fs.Join(ctx.BackupFolder, ctx.Timestamp, cfg.Name, Fs.Base(configFile)))
+					if ctx.ZipBackup {
+						finalDirForLog = Fs.Dir(Fs.Join(ctx.StagingDir, cfg.Name, Fs.Base(configFile)))
 						Printer.Print("Would create staging directory: %s\n", finalDirForLog)
 					} else {
 						Printer.Print("Would create versioned backup directory: %s\n", finalDirForLog)
@@ -666,9 +593,9 @@ func ProcessConfiguration(configFolder, backupFolder string, appNames []string, 
 						return err
 					}
 
-					finalBackupPath := Fs.Join(backupFolder, timestamp, cfg.Name, Fs.Base(configFile))
-					if zipBackup {
-						finalBackupPath = Fs.Join(backupFolder, timestamp+".zip", cfg.Name, Fs.Base(configFile)) // Indicate path within zip
+					finalBackupPath := Fs.Join(ctx.BackupFolder, ctx.Timestamp, cfg.Name, Fs.Base(configFile))
+					if ctx.ZipBackup {
+						finalBackupPath = Fs.Join(ctx.BackupFolder, ctx.Timestamp+".zip", cfg.Name, Fs.Base(configFile)) // Indicate path within zip
 					}
 					Printer.Print("Backed up %s to %s", configFile, finalBackupPath)
 					return nil
@@ -724,63 +651,19 @@ func ProcessConfiguration(configFolder, backupFolder string, appNames []string, 
 			}
 		} // End loop through cfg.Files
 
-		if !isBackup && commands {
-			for _, restoreCmd := range cfg.PreRestoreCommands {
-				if DryRun {
-					Printer.Print("Would execute pre-restore command: %s", restoreCmd)
-					continue
-				}
-				err := command.SafeExecute("pre-restore command execution", func() error {
-					if !command.ExecuteCommandLine(restoreCmd) {
-						return AppLogger.LogErrorf("command execution failed")
-					}
-					return nil
-				})
-				if err != nil {
-					AppLogger.Logf("Failed to execute pre-restore command: %v", err)
-				}
-			}
-			for _, restoreCmd := range cfg.PostRestoreCommands {
-				if DryRun {
-					Printer.Print("Would execute post-restore command: %s", restoreCmd)
-					continue
-				}
-				err := command.SafeExecute("post-restore command execution", func() error {
-					if !command.ExecuteCommandLine(restoreCmd) {
-						return AppLogger.LogErrorf("command execution failed")
-					}
-					return nil
-				})
-				if err != nil {
-					AppLogger.Logf("Failed to execute post-restore command: %v", err)
-				}
-			}
+		if !ctx.IsBackup && ctx.Commands {
+			ctx.ExecuteCommands(cfg.PreRestoreCommands, "pre-restore")
+			ctx.ExecuteCommands(cfg.PostRestoreCommands, "post-restore")
 		}
 	} // End loop through config files
-
-	if isBackup && zipBackup {
-		if stagingDir == "" {
-			_ = AppLogger.LogErrorf("Staging directory path is empty, cannot create zip archive.")
-		} else {
-			targetZipPath := Fs.Join(backupFolder, timestamp+".zip")
-			AppLogger.Logf("Creating zip archive: %s", targetZipPath)
-			if err := createZipArchive(stagingDir, targetZipPath); err != nil {
-				_ = AppLogger.LogErrorf("Failed to create zip archive: %v", err)
-			} else {
-				AppLogger.Logf("Successfully created zip archive: %s", targetZipPath)
-			}
-		}
-	}
 
 	if !foundCfg {
 		AppLogger.Logf("No .cfg files found to process in %s.", configReadDir)
 	}
 
-	if isBackup && versionsToKeep > 0 {
-		err := CleanupOldVersions(backupFolder, versionsToKeep)
-		if err != nil {
-			AppLogger.Logf("Failed to cleanup old versions: %v", err)
-		}
+	// Finalize backup (creates zip and cleans up old versions)
+	if err := ctx.FinalizeBackup(); err != nil {
+		AppLogger.Logf("Error finalizing backup: %v", err)
 	}
 } // Closing brace for ProcessConfiguration
 
@@ -879,14 +762,16 @@ func extractFromZip(zipPath, entryPath, destinationPath string) error {
 		if f.Name == entryPath || strings.HasPrefix(f.Name, entryPath+"/") {
 			found = true
 			extractPath := ""
+			cleanExtractPath := ""
 			if f.Name == entryPath {
 				extractPath = destinationPath
+				cleanExtractPath = filepath.Clean(extractPath)
 			} else {
 				relPath := strings.TrimPrefix(f.Name, entryPath+"/")
 				extractPath = filepath.Join(destinationPath, relPath)
-
+	
 				// Validate extractPath to prevent directory traversal
-				cleanExtractPath := filepath.Clean(extractPath)
+				cleanExtractPath = filepath.Clean(extractPath)
 				absExtractPath, err := filepath.Abs(cleanExtractPath)
 				if err != nil {
 					return fmt.Errorf("failed to resolve absolute path for '%s': %w", cleanExtractPath, err)
@@ -899,7 +784,7 @@ func extractFromZip(zipPath, entryPath, destinationPath string) error {
 					return fmt.Errorf("invalid file path '%s': outside of destination '%s'", absExtractPath, absDestinationPath)
 				}
 			}
-
+	
 			if f.FileInfo().IsDir() {
 				if err := os.MkdirAll(cleanExtractPath, f.Mode()); err != nil {
 					return fmt.Errorf("failed to create directory '%s': %w", cleanExtractPath, err)
