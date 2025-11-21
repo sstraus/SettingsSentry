@@ -19,7 +19,7 @@ import (
 var embeddedConfigsFiles embed.FS
 
 var (
-	Version string = "1.1.7"
+	Version string = "1.1.8"
 )
 
 func main() {

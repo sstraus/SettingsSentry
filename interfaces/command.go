@@ -17,7 +17,7 @@ type CommandExecutor interface {
 type OsCommandExecutor struct{}
 
 func (e *OsCommandExecutor) Execute(commandLine string, stdout, stderr io.Writer) bool {
-	cmd := exec.Command("sh", "-c", commandLine)
+	cmd := exec.Command("bash", "-c", commandLine)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
@@ -26,7 +26,7 @@ func (e *OsCommandExecutor) Execute(commandLine string, stdout, stderr io.Writer
 }
 
 func (e *OsCommandExecutor) ExecuteWithCallback(commandLine string, stdoutHandler, stderrHandler OutputHandler) bool {
-	cmd := exec.Command("sh", "-c", commandLine)
+	cmd := exec.Command("bash", "-c", commandLine)
 
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {

@@ -121,7 +121,7 @@ func TestAddCronJobWithInvalidSchedule(t *testing.T) {
 func TestInstallCronJob(t *testing.T) {
 	withCrontabBackup(t, func() {
 		// Remove any existing job first
-		RemoveCronJob()
+		_ = RemoveCronJob()
 
 		err := InstallCronJob("")
 		// May fail if settingssentry is not in PATH, which is expected
@@ -138,7 +138,7 @@ func TestInstallCronJob(t *testing.T) {
 func TestInstallCronJob_WithExpression(t *testing.T) {
 	withCrontabBackup(t, func() {
 		// Remove any existing job first
-		RemoveCronJob()
+		_ = RemoveCronJob()
 
 		err := InstallCronJob("0 0 * * *")
 		// May fail if settingssentry is not in PATH
@@ -250,7 +250,7 @@ func TestAddCronJob_ValidCronExpression(t *testing.T) {
 
 func TestRemoveCronJob_NoCrontab(t *testing.T) {
 	// First, remove all cron jobs to ensure clean state
-	exec.Command("crontab", "-r").Run()
+	_ = exec.Command("crontab", "-r").Run()
 
 	// Should not error when there's no crontab
 	err := RemoveCronJob()
@@ -264,7 +264,7 @@ func TestRemoveCronJob_NoMatchingJob(t *testing.T) {
 		// Add a different cron job that doesn't match our comment
 		cmd := exec.Command("crontab", "-")
 		cmd.Stdin = strings.NewReader("0 0 * * * echo 'other job'\n")
-		cmd.Run()
+		_ = cmd.Run()
 
 		err := RemoveCronJob()
 		if err != nil {
@@ -288,7 +288,7 @@ func TestRemoveCronJob_NoMatchingJob(t *testing.T) {
 
 func TestIsCronJobInstalled_NoCrontab(t *testing.T) {
 	// Remove all cron jobs
-	exec.Command("crontab", "-r").Run()
+	_ = exec.Command("crontab", "-r").Run()
 
 	installed, err := IsCronJobInstalled()
 	if err != nil {

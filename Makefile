@@ -1,4 +1,4 @@
-.PHONY: build test lint clean release help dmg zip coverage integration-test
+.PHONY: build test lint clean release help dmg zip coverage integration-test act-test act-lint
 
 BINARY_NAME=settingssentry
 VERSION=$(shell git describe --tags --always --dirty)
@@ -11,6 +11,8 @@ help:
 	@echo "  make integration-test - Run integration tests"
 	@echo "  make coverage         - Generate test coverage report"
 	@echo "  make lint             - Run linter"
+	@echo "  make act-test         - Run tests with act (GitHub Actions locally)"
+	@echo "  make act-lint         - Run linter with act (GitHub Actions locally)"
 	@echo "  make clean            - Remove build artifacts"
 	@echo "  make release          - Create a new release"
 	@echo "  make dmg              - Create a macOS DMG installer"
@@ -75,3 +77,17 @@ install: build
 
 uninstall:
 	rm -f /usr/local/bin/${BINARY_NAME}
+
+act-test:
+	@if ! command -v act &> /dev/null; then \
+		echo "act not found. Install it with: brew install act"; \
+		exit 1; \
+	fi
+	act push -j test
+
+act-lint:
+	@if ! command -v act &> /dev/null; then \
+		echo "act not found. Install it with: brew install act"; \
+		exit 1; \
+	fi
+	act push -j lint

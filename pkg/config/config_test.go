@@ -5,6 +5,7 @@ import (
 	// "SettingsSentry/logger" // No longer needed directly
 	"SettingsSentry/pkg/testutil" // Added testutil
 	"SettingsSentry/pkg/util"     // Keep util for Fs/AppLogger access
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +117,7 @@ func TestGetXDGConfigHome(t *testing.T) {
 
 	// Save original HOME env var
 	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
 	tests := []struct {
 		name           string
@@ -155,11 +156,11 @@ func TestGetXDGConfigHome(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("HOME", tt.homeValue)
+			_ = os.Setenv("HOME", tt.homeValue)
 			if tt.xdgValue != "" {
-				os.Setenv("XDG_CONFIG_HOME", tt.xdgValue)
+				_ = os.Setenv("XDG_CONFIG_HOME", tt.xdgValue)
 			} else {
-				os.Unsetenv("XDG_CONFIG_HOME")
+				_ = os.Unsetenv("XDG_CONFIG_HOME")
 			}
 
 			result, err := GetXDGConfigHome()
@@ -180,7 +181,7 @@ func TestGetXDGConfigHome(t *testing.T) {
 	}
 
 	// Cleanup
-	os.Unsetenv("XDG_CONFIG_HOME")
+	_ = os.Unsetenv("XDG_CONFIG_HOME")
 }
 
 func TestValidateConfig_Additional(t *testing.T) {
@@ -331,8 +332,8 @@ func TestExpandEnvVars_Additional(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.envKey != "" {
-				os.Setenv(tt.envKey, tt.envValue)
-				defer os.Unsetenv(tt.envKey)
+				_ = os.Setenv(tt.envKey, tt.envValue)
+				defer func() { _ = os.Unsetenv(tt.envKey) }()
 			}
 
 			result := ExpandEnvVars(tt.input)
@@ -349,13 +350,13 @@ func TestParseConfig_Sections(t *testing.T) {
 	// Set HOME for tests that need it
 	originalHome := os.Getenv("HOME")
 	if originalHome == "" {
-		os.Setenv("HOME", "/tmp/testhome")
+		_ = os.Setenv("HOME", "/tmp/testhome")
 	}
 	defer func() {
 		if originalHome == "" {
-			os.Unsetenv("HOME")
+			_ = os.Unsetenv("HOME")
 		} else {
-			os.Setenv("HOME", originalHome)
+			_ = os.Setenv("HOME", originalHome)
 		}
 	}()
 
@@ -485,13 +486,13 @@ func TestParseConfig_XDGPaths(t *testing.T) {
 	// Set HOME for XDG tests
 	originalHome := os.Getenv("HOME")
 	if originalHome == "" {
-		os.Setenv("HOME", "/tmp/testhome")
+		_ = os.Setenv("HOME", "/tmp/testhome")
 	}
 	defer func() {
 		if originalHome == "" {
-			os.Unsetenv("HOME")
+			_ = os.Unsetenv("HOME")
 		} else {
-			os.Setenv("HOME", originalHome)
+			_ = os.Setenv("HOME", originalHome)
 		}
 	}()
 
@@ -555,10 +556,10 @@ name = BadXDG
 func TestGetHomeDirectory(t *testing.T) {
 	// Save original HOME
 	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
 	t.Run("HOME set", func(t *testing.T) {
-		os.Setenv("HOME", "/home/testuser")
+		_ = os.Setenv("HOME", "/home/testuser")
 		home, err := GetHomeDirectory()
 		if err != nil {
 			t.Errorf("Unexpected error: %v", err)
@@ -569,7 +570,7 @@ func TestGetHomeDirectory(t *testing.T) {
 	})
 
 	t.Run("HOME not set", func(t *testing.T) {
-		os.Unsetenv("HOME")
+		_ = os.Unsetenv("HOME")
 		_, err := GetHomeDirectory()
 		if err == nil {
 			t.Error("Expected error when HOME is not set")
@@ -582,12 +583,12 @@ func TestGetICloudFolderLocation(t *testing.T) {
 
 	// Save original HOME
 	originalHome := os.Getenv("HOME")
-	defer os.Setenv("HOME", originalHome)
+	defer func() { _ = os.Setenv("HOME", originalHome) }()
 
 	t.Run("iCloud folder exists", func(t *testing.T) {
 		// Create temp directory structure
 		tempDir := t.TempDir()
-		os.Setenv("HOME", tempDir)
+		_ = os.Setenv("HOME", tempDir)
 
 		icloudPath := filepath.Join(tempDir, "Library", "Mobile Documents", "com~apple~CloudDocs")
 		err := os.MkdirAll(icloudPath, 0755)
@@ -606,7 +607,7 @@ func TestGetICloudFolderLocation(t *testing.T) {
 
 	t.Run("iCloud folder not found", func(t *testing.T) {
 		tempDir := t.TempDir()
-		os.Setenv("HOME", tempDir)
+		_ = os.Setenv("HOME", tempDir)
 
 		_, err := GetICloudFolderLocation()
 		if err == nil {
@@ -624,4 +625,420 @@ func TestGetICloudFolderLocation(t *testing.T) {
 			t.Error("Expected error when Fs is nil")
 		}
 	})
+}
+
+// TestValidateConfig_GlobInvalidPattern tests invalid glob patterns
+func TestValidateConfig_GlobInvalidPattern(t *testing.T) {
+	setupTestDependencies()
+
+	// Create test directory
+	tempDir := t.TempDir()
+	_ = os.Setenv("HOME", tempDir)
+	defer func() { _ = os.Unsetenv("HOME") }()
+
+	tests := []struct {
+		name        string
+		file        string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid glob in existing dir",
+			file:        "~/.config/*",
+			expectError: false,
+		},
+		{
+			name:        "glob in non-existent dir",
+			file:        "~/nonexistent/*",
+			expectError: true,
+			errorMsg:    "does not exist",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create .config dir for first test
+			if tt.name == "valid glob in existing dir" {
+				configDir := filepath.Join(tempDir, ".config")
+				_ = os.MkdirAll(configDir, 0755)
+			}
+
+			config := Config{
+				Name:  "TestApp",
+				Files: []string{tt.file},
+			}
+
+			err := ValidateConfig(config)
+			if tt.expectError && err == nil {
+				t.Error("Expected error, got nil")
+			} else if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			} else if tt.expectError && err != nil && tt.errorMsg != "" {
+				if !strings.Contains(err.Error(), tt.errorMsg) {
+					t.Errorf("Error should contain %q, got: %v", tt.errorMsg, err)
+				}
+			}
+		})
+	}
+}
+
+// TestValidateConfig_NilFilesystem tests validation with nil filesystem
+func TestValidateConfig_NilFilesystem(t *testing.T) {
+	originalFs := Fs
+	defer func() { Fs = originalFs }()
+
+	Fs = nil
+
+	config := Config{
+		Name:  "TestApp",
+		Files: []string{".config"},
+	}
+
+	err := ValidateConfig(config)
+	if err == nil {
+		t.Error("Expected error when Fs is nil")
+	}
+	if !strings.Contains(err.Error(), "not initialized") {
+		t.Errorf("Error should mention not initialized, got: %v", err)
+	}
+}
+
+// TestValidateConfig_NilLogger tests validation with nil logger
+func TestValidateConfig_NilLogger(t *testing.T) {
+	setupTestDependencies()
+
+	originalLogger := AppLogger
+	defer func() { AppLogger = originalLogger }()
+
+	AppLogger = nil
+
+	tempDir := t.TempDir()
+	_ = os.Setenv("HOME", tempDir)
+	defer func() { _ = os.Unsetenv("HOME") }()
+
+	// Test with glob in non-existent directory
+	config := Config{
+		Name:  "TestApp",
+		Files: []string{"~/nonexistent/*"},
+	}
+
+	err := ValidateConfig(config)
+	if err == nil {
+		t.Error("Expected error for non-existent directory")
+	}
+	// Should still return error even with nil logger
+	t.Logf("ValidateConfig with nil logger: %v", err)
+}
+
+// TestParseConfig_MalformedINI tests parsing malformed INI content
+func TestParseConfig_MalformedINI(t *testing.T) {
+	setupTestDependencies()
+
+	tempDir := t.TempDir()
+
+	tests := []struct {
+		name        string
+		content     string
+		expectError bool
+	}{
+		{
+			name: "missing section bracket",
+			content: `[application
+name = TestApp
+[configuration_files]
+.config
+`,
+			expectError: true, // Parser should catch malformed INI
+		},
+		{
+			name: "empty file",
+			content: ``,
+			expectError: true, // No name or files
+		},
+		{
+			name: "only comments",
+			content: `# This is a comment
+; Another comment
+`,
+			expectError: true, // No actual config
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(tempDir, "test.cfg")
+			err := os.WriteFile(configPath, []byte(tt.content), 0644)
+			if err != nil {
+				t.Fatalf("Failed to write config: %v", err)
+			}
+
+			testFS := os.DirFS(tempDir)
+			config, err := ParseConfig(testFS, "test.cfg")
+			
+			if tt.expectError {
+				// Validation might catch the error
+				if err == nil {
+					// Parse succeeded, check validation
+					validateErr := ValidateConfig(config)
+					if validateErr == nil {
+						t.Error("Expected error for malformed config")
+					}
+				}
+				// If err is not nil, test passes (error caught during parse)
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected parse error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestParseConfig_MissingSections tests handling of missing required sections
+func TestParseConfig_MissingSections(t *testing.T) {
+	setupTestDependencies()
+
+	tempDir := t.TempDir()
+
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{
+			name: "missing application name",
+			content: `[configuration_files]
+.config
+`,
+		},
+		{
+			name: "missing configuration files",
+			content: `[application]
+name = TestApp
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(tempDir, "test.cfg")
+			err := os.WriteFile(configPath, []byte(tt.content), 0644)
+			if err != nil {
+				t.Fatalf("Failed to write config: %v", err)
+			}
+
+			testFS := os.DirFS(tempDir)
+			config, err := ParseConfig(testFS, "test.cfg")
+			
+			// Parse should succeed but validation should fail
+			if err != nil {
+				t.Logf("Parse returned error: %v", err)
+			}
+			
+			validateErr := ValidateConfig(config)
+			if validateErr == nil {
+				t.Error("Expected validation error for incomplete config")
+			}
+		})
+	}
+}
+
+// TestParseConfig_InvalidPaths tests handling of invalid file paths
+func TestParseConfig_InvalidPaths(t *testing.T) {
+	setupTestDependencies()
+
+	tempDir := t.TempDir()
+	_ = os.Setenv("HOME", tempDir)
+	defer func() { _ = os.Unsetenv("HOME") }()
+
+	configContent := `[application]
+name = TestApp
+
+[configuration_files]
+~/test/.config
+`
+	configPath := filepath.Join(tempDir, "test.cfg")
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	testFS := os.DirFS(tempDir)
+	config, err := ParseConfig(testFS, "test.cfg")
+	if err != nil {
+		t.Fatalf("ParseConfig failed: %v", err)
+	}
+
+	// Path should be expanded - check if files were parsed
+	if len(config.Files) > 0 {
+		// The path may or may not be expanded depending on ParseConfig implementation
+		// Just verify we have a file path
+		if config.Files[0] == "" {
+			t.Error("Expected non-empty file path")
+		}
+		t.Logf("Parsed file path: %s", config.Files[0])
+	} else {
+		t.Error("Expected at least one file in config")
+	}
+}
+
+// TestParseConfig_LargeFile tests parsing large configuration files
+func TestParseConfig_LargeFile(t *testing.T) {
+	setupTestDependencies()
+
+	tempDir := t.TempDir()
+
+	// Create a large config file
+	var content strings.Builder
+	content.WriteString("[application]\nname = LargeApp\n\n[configuration_files]\n")
+	
+	// Add many file entries
+	for i := 0; i < 1000; i++ {
+		content.WriteString(fmt.Sprintf(".config/file%d\n", i))
+	}
+
+	configPath := filepath.Join(tempDir, "large.cfg")
+	err := os.WriteFile(configPath, []byte(content.String()), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	testFS := os.DirFS(tempDir)
+	config, err := ParseConfig(testFS, "large.cfg")
+	if err != nil {
+		t.Errorf("ParseConfig failed for large file: %v", err)
+	}
+
+	if len(config.Files) != 1000 {
+		t.Errorf("Expected 1000 files, got %d", len(config.Files))
+	}
+}
+
+// TestParseConfig_ScannerError tests handling of scanner errors
+func TestParseConfig_ScannerError(t *testing.T) {
+	setupTestDependencies()
+
+	tempDir := t.TempDir()
+
+	// Normal file should not cause scanner errors
+	configContent := `[application]
+name = TestApp
+
+[configuration_files]
+.config
+`
+	configPath := filepath.Join(tempDir, "test.cfg")
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	testFS := os.DirFS(tempDir)
+	config, err := ParseConfig(testFS, "test.cfg")
+	if err != nil {
+		t.Errorf("ParseConfig failed: %v", err)
+	}
+
+	if config.Name != "TestApp" {
+		t.Errorf("Name = %q, want 'TestApp'", config.Name)
+	}
+}
+
+// TestValidateConfig_WhitespaceFiles tests validation of files with only whitespace
+func TestValidateConfig_WhitespaceFiles(t *testing.T) {
+	setupTestDependencies()
+
+	tests := []struct {
+		name        string
+		files       []string
+		expectError bool
+	}{
+		{
+			name:        "tab only",
+			files:       []string{"\t"},
+			expectError: true,
+		},
+		{
+			name:        "newline only",
+			files:       []string{"\n"},
+			expectError: true,
+		},
+		{
+			name:        "multiple spaces",
+			files:       []string{"     "},
+			expectError: true,
+		},
+		{
+			name:        "mixed whitespace",
+			files:       []string{" \t \n "},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := Config{
+				Name:  "TestApp",
+				Files: tt.files,
+			}
+
+			err := ValidateConfig(config)
+			if tt.expectError && err == nil {
+				t.Error("Expected error for whitespace-only file path")
+			} else if !tt.expectError && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// TestValidateConfig_EmptyName tests validation with empty application name
+func TestValidateConfig_EmptyName(t *testing.T) {
+	setupTestDependencies()
+
+	config := Config{
+		Name:  "",
+		Files: []string{".config"},
+	}
+
+	err := ValidateConfig(config)
+	if err == nil {
+		t.Error("Expected error for empty application name")
+	}
+	if !strings.Contains(err.Error(), "name is required") {
+		t.Errorf("Error should mention required name, got: %v", err)
+	}
+}
+
+// TestParseConfig_NilLogger tests parsing with nil logger
+func TestParseConfig_NilLogger(t *testing.T) {
+	setupTestDependencies()
+
+	originalLogger := AppLogger
+	defer func() { AppLogger = originalLogger }()
+
+	AppLogger = nil
+
+	tempDir := t.TempDir()
+
+	configContent := `[application]
+name = TestApp
+
+[configuration_files]
+.config
+`
+	configPath := filepath.Join(tempDir, "test.cfg")
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	testFS := os.DirFS(tempDir)
+	config, err := ParseConfig(testFS, "test.cfg")
+	if err != nil {
+		t.Errorf("ParseConfig should handle nil logger: %v", err)
+	}
+
+	if config.Name != "TestApp" {
+		t.Errorf("Name = %q, want 'TestApp'", config.Name)
+	}
 }

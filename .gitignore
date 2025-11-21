@@ -1,3 +1,4 @@
+.actrc
 .aider*
 .DS_Store
 .env
@@ -18,3 +19,4 @@ settingssentry
 SettingsSentry.zip
 test.yaml
 todo.txt
+

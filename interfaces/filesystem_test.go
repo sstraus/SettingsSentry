@@ -23,14 +23,14 @@ func TestOsFileSystem_CreateAndOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Write() failed: %v", err)
 	}
-	file.Close()
+	_ = file.Close()
 
 	// Test Open
 	file, err = fs.Open(testFile)
 	if err != nil {
 		t.Fatalf("Open() failed: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	readContent := make([]byte, len(content))
 	_, err = file.Read(readContent)
@@ -288,7 +288,7 @@ func TestOsFile_Interface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	osFile := &OsFile{File: file}
 
@@ -305,13 +305,13 @@ func TestOsFile_Interface(t *testing.T) {
 	}
 
 	// Close and reopen for reading
-	osFile.Close()
+	_ = osFile.Close()
 
 	file, err = os.Open(testFile)
 	if err != nil {
 		t.Fatalf("Failed to open test file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	osFile = &OsFile{File: file}
 

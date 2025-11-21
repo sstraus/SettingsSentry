@@ -185,7 +185,7 @@ func TestGetLatestVersionPath_Extended(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Failed to create zip file: %v", err)
 					}
-					f.Close()
+					_ = f.Close()
 				} else {
 					// Create directory
 					dirPath := filepath.Join(testBackupDir, version)
@@ -289,7 +289,7 @@ func TestCleanupOldVersions_Extended(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Failed to create zip file: %v", err)
 					}
-					f.Close()
+					_ = f.Close()
 				} else {
 					dirPath := filepath.Join(testBackupDir, version)
 					err := os.MkdirAll(dirPath, 0755)
@@ -392,11 +392,11 @@ func TestCopyFile_Errors(t *testing.T) {
 
 	t.Run("invalid destination directory", func(t *testing.T) {
 		src := filepath.Join(tempDir, "source.txt")
-		os.WriteFile(src, []byte("test"), 0644)
+		_ = os.WriteFile(src, []byte("test"), 0644)
 
 		// Try to write to a file as if it were a directory
 		badDir := filepath.Join(tempDir, "file.txt")
-		os.WriteFile(badDir, []byte("block"), 0644)
+		_ = os.WriteFile(badDir, []byte("block"), 0644)
 		dst := filepath.Join(badDir, "dest.txt")
 
 		err := copyFile(src, dst)
