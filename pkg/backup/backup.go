@@ -762,27 +762,25 @@ func extractFromZip(zipPath, entryPath, destinationPath string) error {
 		if f.Name == entryPath || strings.HasPrefix(f.Name, entryPath+"/") {
 			found = true
 			extractPath := ""
-			cleanExtractPath := ""
 			if f.Name == entryPath {
 				extractPath = destinationPath
-				cleanExtractPath = filepath.Clean(extractPath)
 			} else {
 				relPath := strings.TrimPrefix(f.Name, entryPath+"/")
 				extractPath = filepath.Join(destinationPath, relPath)
-	
-				// Validate extractPath to prevent directory traversal
-				cleanExtractPath = filepath.Clean(extractPath)
-				absExtractPath, err := filepath.Abs(cleanExtractPath)
-				if err != nil {
-					return fmt.Errorf("failed to resolve absolute path for '%s': %w", cleanExtractPath, err)
-				}
-				absDestinationPath, err := filepath.Abs(destinationPath)
-				if err != nil {
-					return fmt.Errorf("failed to resolve absolute path for destination '%s': %w", destinationPath, err)
-				}
-				if !strings.HasPrefix(absExtractPath, absDestinationPath) {
-					return fmt.Errorf("invalid file path '%s': outside of destination '%s'", absExtractPath, absDestinationPath)
-				}
+			}
+
+			// Validate extractPath to prevent directory traversal (Zip Slip)
+			cleanExtractPath := filepath.Clean(extractPath)
+			absExtractPath, err := filepath.Abs(cleanExtractPath)
+			if err != nil {
+				return fmt.Errorf("failed to resolve absolute path for '%s': %w", cleanExtractPath, err)
+			}
+			absDestinationPath, err := filepath.Abs(destinationPath)
+			if err != nil {
+				return fmt.Errorf("failed to resolve absolute path for destination '%s': %w", destinationPath, err)
+			}
+			if !strings.HasPrefix(absExtractPath, absDestinationPath+string(filepath.Separator)) && absExtractPath != absDestinationPath {
+				return fmt.Errorf("invalid file path '%s': outside of destination '%s'", absExtractPath, absDestinationPath)
 			}
 	
 			if f.FileInfo().IsDir() {
