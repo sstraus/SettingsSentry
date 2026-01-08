@@ -42,9 +42,46 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - Optional ZIP archive backup format (`-zip` flag).
 - Optional password-based encryption (`-password` flag).
 
+## Installation
+
+### Homebrew (Recommended)
+
+```bash
+# Add the tap
+brew tap sstraus/settingssentry
+
+# Install SettingsSentry
+brew install settingssentry
+
+# Or install in one command
+brew install sstraus/settingssentry/settingssentry
+```
+
+### Download from GitHub Releases
+
+Download the latest release for your architecture from the [releases page](https://github.com/sstraus/SettingsSentry/releases):
+- **Apple Silicon (M1/M2/M3)**: `SettingsSentry_arm64.zip`
+- **Intel Mac**: `SettingsSentry_x86_64.zip`
+
+Extract and move the binary to your PATH:
+```bash
+unzip SettingsSentry_arm64.zip
+chmod +x settingssentry
+sudo mv settingssentry /usr/local/bin/
+```
+
 ## Usage
 
-./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<app1,app2,...>`] [-allow-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`] [-password=<pwd>] [-zip]
+```bash
+settingssentry <action> [options]
+```
+
+**If running the downloaded binary directly:**
+```bash
+./settingssentry <action> [options]
+```
+
+**Available options:** `[-config=<path>] [-backup=<path>] [-app=<app1,app2,...>] [-allow-commands] [-dry-run] [-versions=<n>] [-logfile=<path>] [-password=<pwd>] [-zip]`
 
 ### Actions
 
@@ -153,6 +190,9 @@ The dry-run mode allows you to preview what would happen during backup or restor
 
 To use dry-run mode, add the `-dry-run` flag to your command:
 
+```sh
+settingssentry backup -dry-run
+```
 
 ### Encryption
 
@@ -163,10 +203,6 @@ SettingsSentry supports optional password-based encryption for your backups usin
 - To **restore** an encrypted backup, you **must** provide the **same password** using the `-password` flag or the `SETTINGSSENTRY_PASSWORD` environment variable during the `restore` action.
 - If an encrypted backup (`.encrypted` files) is detected during restore and no password is provided, the restore for those files will fail with an error message prompting for the password.
 - **Security Note:** The security of the encryption relies heavily on the strength of the password you choose. Use a strong, unique password.
-
-```sh
-./SettingsSentry backup -dry-run
-```
 
 ## License
 
