@@ -1,0 +1,23 @@
+main_cli.go
+  a945502592638571 217,223-225,228-238,240-247,249-255,257,267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.29",
+  "base_commit_sha": "2ad6d9dd0790a8a03aaa2ba378087550bd78dd2f",
+  "prompts": {
+    "a945502592638571": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a1a551a-91e0-4a56-bc18-d193d17793fc",
+        "model": "claude-sonnet-4-5-20250929"
+      },
+      "human_author": "Stefano Straus <stefano@straus.it>",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 9,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    }
+  }
+}
