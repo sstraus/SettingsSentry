@@ -1,0 +1,23 @@
+CLAUDE.md
+  a945502592638571 1-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.29",
+  "base_commit_sha": "59386cb22184e49ddd106b6247195ef1b4fb69aa",
+  "prompts": {
+    "a945502592638571": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a1a551a-91e0-4a56-bc18-d193d17793fc",
+        "model": "claude-sonnet-4-5-20250929"
+      },
+      "human_author": "Stefano Straus <stefano@straus.it>",
+      "messages": [],
+      "total_additions": 209,
+      "total_deletions": 0,
+      "accepted_lines": 209,
+      "overriden_lines": 0
+    }
+  }
+}
