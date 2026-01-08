@@ -1,0 +1,23 @@
+.gitignore
+  a945502592638571 3-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.29",
+  "base_commit_sha": "3c93d3ec4e63c328173bb8e1f5402f835815f8d4",
+  "prompts": {
+    "a945502592638571": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a1a551a-91e0-4a56-bc18-d193d17793fc",
+        "model": "claude-sonnet-4-5-20250929"
+      },
+      "human_author": "Stefano Straus <stefano@straus.it>",
+      "messages": [],
+      "total_additions": 2,
+      "total_deletions": 1,
+      "accepted_lines": 2,
+      "overriden_lines": 0
+    }
+  }
+}
