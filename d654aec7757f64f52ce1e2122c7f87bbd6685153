@@ -1,0 +1,23 @@
+README.md
+  a945502592638571 45-72,75-84,193-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.29",
+  "base_commit_sha": "d654aec7757f64f52ce1e2122c7f87bbd6685153",
+  "prompts": {
+    "a945502592638571": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a1a551a-91e0-4a56-bc18-d193d17793fc",
+        "model": "claude-sonnet-4-5-20250929"
+      },
+      "human_author": "Stefano Straus <stefano@straus.it>",
+      "messages": [],
+      "total_additions": 41,
+      "total_deletions": 5,
+      "accepted_lines": 41,
+      "overriden_lines": 0
+    }
+  }
+}
