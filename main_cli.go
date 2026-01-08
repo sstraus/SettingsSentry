@@ -101,14 +101,24 @@ func (c *CLI) ParseFlags(args []string) (action string, flags map[string]interfa
 		return "", nil, fmt.Errorf("error parsing flags: %w", err)
 	}
 
+	// Validate versionsToKeep is non-negative
+	if *versionsToKeep < 0 {
+		return "", nil, fmt.Errorf("versions must be non-negative, got %d", *versionsToKeep)
+	}
+
 	// Split the appNameFlag string into a slice
 	var appNames []string
 	if *appNameFlag != "" {
 		appNames = strings.Split(*appNameFlag, ",")
-		// Trim whitespace from each app name
-		for i := range appNames {
-			appNames[i] = strings.TrimSpace(appNames[i])
+		// Trim whitespace from each app name and filter out empty strings
+		var filteredNames []string
+		for _, name := range appNames {
+			trimmed := strings.TrimSpace(name)
+			if trimmed != "" {
+				filteredNames = append(filteredNames, trimmed)
+			}
 		}
+		appNames = filteredNames
 	}
 
 	flags = map[string]interface{}{

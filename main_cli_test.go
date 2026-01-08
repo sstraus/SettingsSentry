@@ -801,3 +801,109 @@ func TestParseFlags_DefaultValues(t *testing.T) {
 		t.Error("zip should default to false")
 	}
 }
+
+// TestParseFlags_NegativeVersions tests that negative versions are rejected
+func TestParseFlags_NegativeVersions(t *testing.T) {
+	cli, testLogger := setupCLITest()
+	defer testLogger.Close()
+
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{
+			name:    "negative versions",
+			args:    []string{"backup", "-versions=-5"},
+			wantErr: true,
+		},
+		{
+			name:    "negative versions with -1",
+			args:    []string{"backup", "-versions=-1"},
+			wantErr: true,
+		},
+		{
+			name:    "zero versions (should be valid - means keep all)",
+			args:    []string{"backup", "-versions=0"},
+			wantErr: false,
+		},
+		{
+			name:    "positive versions",
+			args:    []string{"backup", "-versions=5"},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := cli.ParseFlags(tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseFlags() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestParseFlags_EmptyAppNames tests that empty app names are filtered out
+func TestParseFlags_EmptyAppNames(t *testing.T) {
+	cli, testLogger := setupCLITest()
+	defer testLogger.Close()
+
+	tests := []struct {
+		name         string
+		args         []string
+		expectedApps []string
+	}{
+		{
+			name:         "empty strings in app list",
+			args:         []string{"backup", "-app=app1,,app2"},
+			expectedApps: []string{"app1", "app2"},
+		},
+		{
+			name:         "spaces become empty after trim",
+			args:         []string{"backup", "-app=app1, ,app2"},
+			expectedApps: []string{"app1", "app2"},
+		},
+		{
+			name:         "only empty strings",
+			args:         []string{"backup", "-app=,,"},
+			expectedApps: []string{},
+		},
+		{
+			name:         "mixed empty and valid",
+			args:         []string{"backup", "-app=,,app1, ,app2,,"},
+			expectedApps: []string{"app1", "app2"},
+		},
+		{
+			name:         "normal case without empty strings",
+			args:         []string{"backup", "-app=app1,app2,app3"},
+			expectedApps: []string{"app1", "app2", "app3"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, flags, err := cli.ParseFlags(tt.args)
+			if err != nil {
+				t.Fatalf("ParseFlags() error = %v", err)
+			}
+
+			appNames := flags["appNames"].([]string)
+			if len(appNames) != len(tt.expectedApps) {
+				t.Errorf("got %d apps, want %d. Got: %v, Want: %v",
+					len(appNames), len(tt.expectedApps), appNames, tt.expectedApps)
+			}
+
+			// Check each app name
+			for i, expected := range tt.expectedApps {
+				if i >= len(appNames) {
+					t.Errorf("missing app at index %d: want %s", i, expected)
+					continue
+				}
+				if appNames[i] != expected {
+					t.Errorf("app[%d] = %s, want %s", i, appNames[i], expected)
+				}
+			}
+		})
+	}
+}
