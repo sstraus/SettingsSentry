@@ -721,3 +721,72 @@ name=` + tt.configName + `
 		})
 	}
 }
+
+// TestProcessConfiguration_PartialBackupFailure tests error aggregation
+func TestProcessConfiguration_PartialBackupFailure(t *testing.T) {
+	tempDir, backupDir := setup
+
+BackupTestDirs(t)
+	defer os.RemoveAll(tempDir)
+	defer os.RemoveAll(backupDir)
+
+	// Create config with multiple files, some will fail
+	configDir := filepath.Join(tempDir, "configs")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a config that references both existing and non-accessible files
+	configContent := `[application]
+name = TestPartialFailure
+
+[configuration_files]
+good_file.txt
+/root/inaccessible.txt
+another_good.txt
+`
+	configPath := filepath.Join(configDir, "partial.cfg")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create the good files
+	goodFile1 := filepath.Join(tempDir, "good_file.txt")
+	goodFile2 := filepath.Join(tempDir, "another_good.txt")
+	os.WriteFile(goodFile1, []byte("content1"), 0644)
+	os.WriteFile(goodFile2, []byte("content2"), 0644)
+
+	// Run backup - should aggregate errors
+	err := ProcessConfiguration(configDir, backupDir, []string{}, true, false, 1, false, "")
+	
+	// Should return error indicating partial failure
+	if err == nil {
+		t.Error("ProcessConfiguration should return error for partial backup failure")
+	}
+	
+	// Error message should mention failed files
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "failed") && !strings.Contains(errMsg, "error") {
+		t.Errorf("Error message should indicate failures, got: %s", errMsg)
+	}
+
+	// Good files should still be backed up
+	timestamp := getLatestTimestamp(t, backupDir)
+	goodBackup1 := filepath.Join(backupDir, timestamp, "TestPartialFailure", "good_file.txt")
+	goodBackup2 := filepath.Join(backupDir, timestamp, "TestPartialFailure", "another_good.txt")
+	
+	if _, err := os.Stat(goodBackup1); os.IsNotExist(err) {
+		t.Error("Good file 1 should be backed up despite other failures")
+	}
+	if _, err := os.Stat(goodBackup2); os.IsNotExist(err) {
+		t.Error("Good file 2 should be backed up despite other failures")
+	}
+}
+
+func getLatestTimestamp(t *testing.T, backupDir string) string {
+	entries, err := os.ReadDir(backupDir)
+	if err != nil || len(entries) == 0 {
+		t.Fatal("No backup directories found")
+	}
+	return entries[len(entries)-1].Name()
+}

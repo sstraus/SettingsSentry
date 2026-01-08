@@ -1,7 +1,6 @@
 .actrc
 .aider*
-.claude/*
-!.claude/CLAUDE.md
+.claude
 .DS_Store
 .env
 .gitignore
