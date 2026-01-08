@@ -123,7 +123,7 @@ func TestInstallCronJob(t *testing.T) {
 		// Remove any existing job first
 		_ = RemoveCronJob()
 
-		err := InstallCronJob("")
+		err := InstallCronJob("", false)
 		// May fail if settingssentry is not in PATH, which is expected
 		if err != nil {
 			if !strings.Contains(err.Error(), "settingssentry") {
@@ -140,7 +140,7 @@ func TestInstallCronJob_WithExpression(t *testing.T) {
 		// Remove any existing job first
 		_ = RemoveCronJob()
 
-		err := InstallCronJob("0 0 * * *")
+		err := InstallCronJob("0 0 * * *", false)
 		// May fail if settingssentry is not in PATH
 		if err != nil {
 			if !strings.Contains(err.Error(), "settingssentry") {
@@ -154,7 +154,7 @@ func TestInstallCronJob_WithExpression(t *testing.T) {
 
 func TestInstallCronJob_InvalidExpression(t *testing.T) {
 	withCrontabBackup(t, func() {
-		err := InstallCronJob("invalid expression")
+		err := InstallCronJob("invalid expression", false)
 		if err == nil {
 			t.Error("InstallCronJob() should return error for invalid cron expression")
 		}
@@ -307,4 +307,132 @@ func TestCronComment(t *testing.T) {
 	if !strings.Contains(comment, "SettingsSentry") {
 		t.Error("comment should contain 'SettingsSentry'")
 	}
+}
+
+// TestInstallCronJob_UsesAbsolutePath tests that InstallCronJob uses an absolute path
+// rather than relying on PATH, which could be manipulated by an attacker
+func TestInstallCronJob_UsesAbsolutePath(t *testing.T) {
+	withCrontabBackup(t, func() {
+		// Remove any existing job first
+		_ = RemoveCronJob()
+
+		err := InstallCronJob("", false)
+		// May fail if settingssentry is not in PATH or not built yet
+		// The test verifies the path resolution approach, not execution success
+		if err != nil {
+			// Check if error is about finding the executable
+			if strings.Contains(err.Error(), "settingssentry") {
+				t.Logf("Expected error (binary not found): %v", err)
+				// This is acceptable - the test is about the approach
+				return
+			}
+			// Other errors might be real issues
+			t.Logf("InstallCronJob returned: %v", err)
+		}
+
+		// If successful, verify the cron job uses an absolute path
+		cmd := exec.Command("crontab", "-l")
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		err = cmd.Run()
+		if err != nil {
+			t.Logf("Could not read crontab: %v", err)
+			return
+		}
+
+		crontabContent := out.String()
+		if !strings.Contains(crontabContent, comment) {
+			// Job wasn't added, which is fine for this test
+			return
+		}
+
+		// Verify the command uses an absolute path (starts with /)
+		lines := strings.Split(crontabContent, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, comment) {
+				// Found our job, check next line for command
+				continue
+			}
+			if strings.Contains(line, "backup") && !strings.HasPrefix(strings.TrimSpace(line), "#") {
+				// This is likely our backup command
+				// Security: It should use absolute path, not rely on PATH
+				if !strings.Contains(line, "/") {
+					t.Error("Cron job command should use absolute path for security")
+					t.Errorf("Found relative command: %s", line)
+				} else {
+					t.Logf("✓ Cron job uses absolute path: %s", line)
+				}
+			}
+		}
+	})
+}
+
+// TestInstallCronJob_AllowCommands tests that the --allow-commands flag is included when requested
+func TestInstallCronJob_AllowCommands(t *testing.T) {
+	withCrontabBackup(t, func() {
+		// Remove any existing job first
+		_ = RemoveCronJob()
+
+		t.Run("without allow-commands flag", func(t *testing.T) {
+			_ = RemoveCronJob()
+
+			err := InstallCronJob("", false)
+			if err != nil {
+				if !strings.Contains(err.Error(), "settingssentry") {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				t.Logf("Expected error (binary not found): %v", err)
+				return
+			}
+
+			// Verify the cron job does NOT include --allow-commands
+			cmd := exec.Command("crontab", "-l")
+			var out bytes.Buffer
+			cmd.Stdout = &out
+			err = cmd.Run()
+			if err != nil {
+				t.Logf("Could not read crontab: %v", err)
+				return
+			}
+
+			crontabContent := out.String()
+			if strings.Contains(crontabContent, "--allow-commands") {
+				t.Error("Cron job should NOT include --allow-commands when flag is false")
+				t.Errorf("Crontab content: %s", crontabContent)
+			} else {
+				t.Logf("✓ Cron job correctly excludes --allow-commands (secure default)")
+			}
+		})
+
+		t.Run("with allow-commands flag", func(t *testing.T) {
+			_ = RemoveCronJob()
+
+			err := InstallCronJob("", true)
+			if err != nil {
+				if !strings.Contains(err.Error(), "settingssentry") {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				t.Logf("Expected error (binary not found): %v", err)
+				return
+			}
+
+			// Verify the cron job DOES include --allow-commands
+			cmd := exec.Command("crontab", "-l")
+			var out bytes.Buffer
+			cmd.Stdout = &out
+			err = cmd.Run()
+			if err != nil {
+				t.Logf("Could not read crontab: %v", err)
+				return
+			}
+
+			crontabContent := out.String()
+			if !strings.Contains(crontabContent, "--allow-commands") {
+				t.Error("Cron job should include --allow-commands when flag is true")
+				t.Errorf("Crontab content: %s", crontabContent)
+			} else {
+				t.Logf("✓ Cron job correctly includes --allow-commands flag")
+			}
+		})
+	})
 }

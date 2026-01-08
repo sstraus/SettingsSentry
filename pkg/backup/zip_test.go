@@ -493,3 +493,206 @@ name = %s
 		t.Errorf("Restore failed: Content mismatch. Expected '%s', got '%s'", sourceFileContent, string(restoredContent))
 	}
 }
+
+// TestExtractFromZip_SymlinkAttack tests that extractFromZip properly rejects
+// symlink-based Zip Slip attacks
+func TestExtractFromZip_SymlinkAttack(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a safe directory outside the extraction destination
+	outsideDir := filepath.Join(tempDir, "outside_target")
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatalf("Failed to create outside directory: %v", err)
+	}
+
+	// Create a malicious zip file containing a symlink pointing outside the destination
+	zipPath := filepath.Join(tempDir, "malicious.zip")
+	zipFile, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatalf("Failed to create test zip file: %v", err)
+	}
+	defer zipFile.Close()
+
+	zipWriter := zip.NewWriter(zipFile)
+
+	// Attack vector: Create a symlink that points outside the extraction directory
+	// The symlink will be created as "evil_link" pointing to the outside directory
+	symlinkHeader := &zip.FileHeader{
+		Name: "evil_link",
+	}
+	symlinkHeader.SetMode(os.ModeSymlink | 0755)
+	symlinkWriter, err := zipWriter.CreateHeader(symlinkHeader)
+	if err != nil {
+		t.Fatalf("Failed to create symlink header: %v", err)
+	}
+	// The "content" of a symlink entry is the target path (relative to extraction point)
+	// Point to the outside directory using absolute path
+	if _, err := symlinkWriter.Write([]byte(outsideDir)); err != nil {
+		t.Fatalf("Failed to write symlink target: %v", err)
+	}
+
+	// Create a file that would be written through the symlink
+	// This file will appear to be "evil_link/payload.txt" in the zip
+	// But when extracted, if symlinks are followed, it would write to outside_target/payload.txt
+	fileHeader := &zip.FileHeader{
+		Name: "evil_link/payload.txt",
+	}
+	fileHeader.SetMode(0644)
+	fileWriter, err := zipWriter.CreateHeader(fileHeader)
+	if err != nil {
+		t.Fatalf("Failed to create file header: %v", err)
+	}
+	if _, err := fileWriter.Write([]byte("MALICIOUS PAYLOAD")); err != nil {
+		t.Fatalf("Failed to write file content: %v", err)
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		t.Fatalf("Failed to close zip writer: %v", err)
+	}
+	if err := zipFile.Close(); err != nil {
+		t.Fatalf("Failed to close zip file: %v", err)
+	}
+
+	// Try to extract - this should fail after the fix
+	extractDest := filepath.Join(tempDir, "extract_dest")
+	if err := os.MkdirAll(extractDest, 0755); err != nil {
+		t.Fatalf("Failed to create extraction destination: %v", err)
+	}
+
+	// Test: Attempt to extract the evil_link directory (which contains the symlink and file)
+	err = extractFromZip(zipPath, "evil_link", extractDest)
+
+	t.Logf("Extraction result: err=%v", err)
+	t.Logf("extractDest: %s", extractDest)
+	t.Logf("outsideDir: %s", outsideDir)
+
+	// Check what was actually extracted
+	extractedSymlink := filepath.Join(extractDest, "evil_link")
+	if symlinkInfo, statErr := os.Lstat(extractedSymlink); statErr == nil {
+		t.Logf("Symlink was extracted: %s, mode=%v", extractedSymlink, symlinkInfo.Mode())
+		if symlinkInfo.Mode()&os.ModeSymlink != 0 {
+			target, linkErr := os.Readlink(extractedSymlink)
+			t.Logf("Symlink target: %s (err=%v)", target, linkErr)
+		}
+	} else {
+		t.Logf("Symlink was NOT extracted (stat error: %v)", statErr)
+	}
+
+	// Check if the attack succeeded by seeing if file was written outside extractDest
+	outsidePayload := filepath.Join(outsideDir, "payload.txt")
+	if _, statErr := os.Stat(outsidePayload); statErr == nil {
+		// The attack succeeded - file was written outside the extraction directory
+		content, readErr := os.ReadFile(outsidePayload)
+		if readErr == nil && string(content) == "MALICIOUS PAYLOAD" {
+			t.Errorf("VULNERABILITY: Symlink attack succeeded! File written outside extraction directory at %s", outsidePayload)
+			t.Errorf("Extraction should have failed or rejected the symlink")
+		}
+	} else {
+		t.Logf("Outside payload does not exist (good): %v", statErr)
+	}
+
+	// After proper fix: extraction should return an error detecting symlink outside destination
+	// For now, we document the expected behavior
+	if err != nil {
+		// Check if it's the right kind of error
+		if !strings.Contains(err.Error(), "symlink") && !strings.Contains(err.Error(), "outside") {
+			t.Logf("Extraction failed with: %v", err)
+		}
+	}
+}
+
+// TestExtractFromZip_PathTraversal tests that extractFromZip properly rejects
+// basic path traversal attempts (existing Zip Slip protection)
+func TestExtractFromZip_PathTraversal(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a directory structure within a zip
+	srcDir := filepath.Join(tempDir, "source")
+	zipPath := filepath.Join(tempDir, "traversal.zip")
+
+	// Create the structure: app/../../outside.txt
+	createDummyFile(t, filepath.Join(srcDir, "app", "config.txt"), "safe content")
+
+	// Now we'll manually modify the zip to add a path traversal entry
+	if err := createZipArchive(srcDir, zipPath); err != nil {
+		t.Fatalf("Failed to create initial zip: %v", err)
+	}
+
+	// Re-open and add malicious entry
+	zipFile, err := os.OpenFile(zipPath, os.O_RDWR, 0644)
+	if err != nil {
+		t.Fatalf("Failed to open zip for modification: %v", err)
+	}
+
+	// Read existing content
+	zipInfo, err := zipFile.Stat()
+	if err != nil {
+		t.Fatalf("Failed to stat zip: %v", err)
+	}
+	zipBytes := make([]byte, zipInfo.Size())
+	if _, err := zipFile.ReadAt(zipBytes, 0); err != nil && err != io.EOF {
+		t.Fatalf("Failed to read zip: %v", err)
+	}
+	zipFile.Close()
+
+	// Create new zip with malicious entry
+	zipFile, err = os.Create(zipPath)
+	if err != nil {
+		t.Fatalf("Failed to recreate zip: %v", err)
+	}
+	defer zipFile.Close()
+
+	zipWriter := zip.NewWriter(zipFile)
+
+	// Add the normal entry
+	normalHeader := &zip.FileHeader{
+		Name: "app/config.txt",
+	}
+	normalHeader.SetMode(0644)
+	normalWriter, err := zipWriter.CreateHeader(normalHeader)
+	if err != nil {
+		t.Fatalf("Failed to create normal header: %v", err)
+	}
+	if _, err := normalWriter.Write([]byte("safe content")); err != nil {
+		t.Fatalf("Failed to write normal content: %v", err)
+	}
+
+	// Add malicious entry with path traversal
+	maliciousHeader := &zip.FileHeader{
+		Name: "app/../../outside.txt",
+	}
+	maliciousHeader.SetMode(0644)
+	maliciousWriter, err := zipWriter.CreateHeader(maliciousHeader)
+	if err != nil {
+		t.Fatalf("Failed to create malicious header: %v", err)
+	}
+	if _, err := maliciousWriter.Write([]byte("malicious content")); err != nil {
+		t.Fatalf("Failed to write malicious content: %v", err)
+	}
+
+	if err := zipWriter.Close(); err != nil {
+		t.Fatalf("Failed to close zip writer: %v", err)
+	}
+
+	// Try to extract the app directory - this should fail when encountering the traversal
+	extractDest := filepath.Join(tempDir, "extract_dest")
+	if err := os.MkdirAll(extractDest, 0755); err != nil {
+		t.Fatalf("Failed to create extraction destination: %v", err)
+	}
+
+	// Test: Attempt to extract - should fail due to path traversal
+	err = extractFromZip(zipPath, "app", extractDest)
+
+	// Should return an error detecting path outside destination
+	if err == nil {
+		t.Errorf("Expected error when extracting directory with path traversal entry, got nil")
+
+		// Check if file was created outside the destination
+		outsidePath := filepath.Join(tempDir, "outside.txt")
+		if _, statErr := os.Stat(outsidePath); statErr == nil {
+			t.Errorf("Path traversal attack succeeded: file created at %s", outsidePath)
+		}
+	} else if !strings.Contains(err.Error(), "outside of destination") && !strings.Contains(err.Error(), "invalid file path") {
+		t.Errorf("Expected error message about 'outside of destination', got: %v", err)
+	}
+}

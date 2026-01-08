@@ -89,7 +89,7 @@ func (c *CLI) ParseFlags(args []string) (action string, flags map[string]interfa
 	configFolder := actionFlags.String("config", c.envConfigFolder, "Path to the configuration folder (env: SETTINGSSENTRY_CONFIG)")
 	backupFolder := actionFlags.String("backup", c.envBackupFolder, "Path to the backup folder (env: SETTINGSSENTRY_BACKUP)")
 	appNameFlag := actionFlags.String("app", c.envAppName, "Optional: Comma-separated list of application names to process (env: SETTINGSSENTRY_APP)")
-	commands := actionFlags.Bool("commands", c.envCommands, "Optional: Prevent pre-backup/restore commands execution (env: SETTINGSSENTRY_COMMANDS)")
+	commands := actionFlags.Bool("allow-commands", c.envCommands, "Optional: Allow execution of pre-backup/restore commands from config files. SECURITY WARNING: Only enable for trusted configs! Commands execute with full user privileges. (env: SETTINGSSENTRY_COMMANDS)")
 	dryRunFlag := actionFlags.Bool("dry-run", c.envDryRun, "Optional: Perform a dry run without making any changes (env: SETTINGSSENTRY_DRY_RUN)")
 	versionsToKeep := actionFlags.Int("versions", 1, "Number of backup versions to keep")
 	password := actionFlags.String("password", c.envPassword, "Optional: Password to encrypt/decrypt backups (env: SETTINGSSENTRY_PASSWORD)")
@@ -182,11 +182,23 @@ func (c *CLI) executeInstall(flags map[string]interface{}) error {
 		cronExpression = extraArgs[0]
 	}
 
-	err := cronjob.InstallCronJob(cronExpression)
+	// Check if --allow-commands flag is set
+	allowCommands := false
+	if val, ok := flags["commands"].(bool); ok {
+		allowCommands = val
+	}
+
+	err := cronjob.InstallCronJob(cronExpression, allowCommands)
 	if err != nil {
 		return fmt.Errorf("failed to install cron job: %w", err)
 	}
-	c.logger.Logf("CRON job installed successfully")
+
+	if allowCommands {
+		c.logger.Logf("CRON job installed successfully with --allow-commands enabled")
+		c.logger.Logf("WARNING: Pre/post backup commands will execute with full user privileges")
+	} else {
+		c.logger.Logf("CRON job installed successfully (commands disabled for security)")
+	}
 	return nil
 }
 

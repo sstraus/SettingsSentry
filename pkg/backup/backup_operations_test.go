@@ -1638,3 +1638,104 @@ func TestRestoreFlow_ErrorCases(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveConfigFilePath_PathTraversal tests that ResolveConfigFilePath
+// properly sanitizes paths to prevent directory traversal attacks
+func TestResolveConfigFilePath_PathTraversal(t *testing.T) {
+	setupBackupOperationsTest()
+
+	tempDir := t.TempDir()
+	mockHomeDir := filepath.Join(tempDir, "home")
+	if err := os.MkdirAll(mockHomeDir, 0755); err != nil {
+		t.Fatalf("Failed to create mock home: %v", err)
+	}
+
+	// Mock GetHomeDirectory
+	originalGetHomeDir := config.GetHomeDirectory
+	config.GetHomeDirectory = func() (string, error) {
+		return mockHomeDir, nil
+	}
+	defer func() { config.GetHomeDirectory = originalGetHomeDir }()
+
+	ctx, err := NewBackupContext("configs", filepath.Join(tempDir, "backup"), nil, true, false, 1, false, "")
+	if err != nil {
+		t.Fatalf("Failed to create BackupContext: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		configFile     string
+		shouldContain  string
+		shouldNotLeave bool // Should NOT leave home directory
+		description    string
+	}{
+		{
+			name:           "path traversal with tilde",
+			configFile:     "~/../../etc/passwd",
+			shouldContain:  mockHomeDir,
+			shouldNotLeave: true,
+			description:    "Attacker tries to access /etc/passwd using ~/../..",
+		},
+		{
+			name:           "path traversal with dot prefix",
+			configFile:     "./../../../etc/passwd",
+			shouldContain:  mockHomeDir,
+			shouldNotLeave: true,
+			description:    "Attacker tries to traverse up with ./../..",
+		},
+		{
+			name:           "path traversal relative",
+			configFile:     "../../etc/passwd",
+			shouldContain:  mockHomeDir,
+			shouldNotLeave: true,
+			description:    "Attacker tries relative path traversal",
+		},
+		{
+			name:          "legitimate nested file",
+			configFile:    "~/.config/app/settings.json",
+			shouldContain: mockHomeDir,
+			description:   "Normal nested config file should work",
+		},
+		{
+			name:          "legitimate dot file",
+			configFile:    ".bashrc",
+			shouldContain: mockHomeDir,
+			description:   "Normal dot file should work",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resolved := ctx.ResolveConfigFilePath(tt.configFile)
+			t.Logf("Config: %s → Resolved: %s", tt.configFile, resolved)
+
+			// Check if resolved path contains home directory
+			if tt.shouldContain != "" && !strings.Contains(resolved, tt.shouldContain) {
+				t.Errorf("Resolved path should contain %s, got: %s", tt.shouldContain, resolved)
+			}
+
+			// Security check: ensure path doesn't leave home directory
+			if tt.shouldNotLeave {
+				cleanResolved := filepath.Clean(resolved)
+				absResolved, err := filepath.Abs(cleanResolved)
+				if err != nil {
+					t.Fatalf("Failed to get absolute path: %v", err)
+				}
+				absHome, err := filepath.Abs(mockHomeDir)
+				if err != nil {
+					t.Fatalf("Failed to get absolute home: %v", err)
+				}
+
+				// After fix: this should pass
+				// Before fix: this will fail for traversal attempts
+				if !strings.HasPrefix(absResolved, absHome) {
+					t.Errorf("SECURITY VULNERABILITY: Path escapes home directory!")
+					t.Errorf("  Input: %s", tt.configFile)
+					t.Errorf("  Resolved: %s", absResolved)
+					t.Errorf("  Home: %s", absHome)
+					t.Errorf("  Description: %s", tt.description)
+				}
+			}
+		})
+	}
+}

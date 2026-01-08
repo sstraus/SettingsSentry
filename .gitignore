@@ -1,5 +1,6 @@
 .actrc
 .aider*
+.claude
 .DS_Store
 .env
 .gitignore
@@ -20,3 +21,4 @@ SettingsSentry.zip
 test.yaml
 todo.txt
 
+AGENTS.md

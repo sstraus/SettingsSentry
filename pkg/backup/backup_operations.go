@@ -165,15 +165,58 @@ func (ctx *BackupContext) LoadZipFileMap(zipPath string) (map[string]bool, *zip.
 }
 
 // ResolveConfigFilePath resolves the config file path relative to home directory
+// and validates that the resolved path stays within the home directory to prevent
+// path traversal attacks (e.g., ~/../../etc/passwd)
 func (ctx *BackupContext) ResolveConfigFilePath(configFile string) string {
+	var resolved string
+
+	// Resolve the path based on its prefix
 	if strings.HasPrefix(configFile, "~/") {
-		return ctx.FS.Join(ctx.HomeDir, configFile[2:])
+		resolved = ctx.FS.Join(ctx.HomeDir, configFile[2:])
 	} else if !strings.HasPrefix(configFile, "/") && !strings.HasPrefix(configFile, ".") {
-		return ctx.FS.Join(ctx.HomeDir, configFile)
+		resolved = ctx.FS.Join(ctx.HomeDir, configFile)
 	} else if strings.HasPrefix(configFile, ".") {
-		return ctx.FS.Join(ctx.HomeDir, configFile)
+		resolved = ctx.FS.Join(ctx.HomeDir, configFile)
+	} else {
+		// Absolute path - return as-is (user explicitly specified full path)
+		return configFile
 	}
-	return configFile
+
+	// Security: Clean the path to resolve .. and . components
+	resolved = filepath.Clean(resolved)
+
+	// Security: Validate the resolved path stays within home directory
+	absResolved, err := filepath.Abs(resolved)
+	if err != nil {
+		// If we can't get absolute path, log warning and return original
+		if AppLogger != nil {
+			AppLogger.Logf("Warning: Could not resolve absolute path for %s: %v", configFile, err)
+		}
+		return resolved
+	}
+
+	absHome, err := filepath.Abs(ctx.HomeDir)
+	if err != nil {
+		// If we can't get absolute home, log warning and return original
+		if AppLogger != nil {
+			AppLogger.Logf("Warning: Could not resolve absolute home directory: %v", err)
+		}
+		return resolved
+	}
+
+	// Check if resolved path is within home directory
+	// Use filepath.Rel to check if absResolved is under absHome
+	relPath, err := filepath.Rel(absHome, absResolved)
+	if err != nil || strings.HasPrefix(relPath, "..") {
+		// Path escapes home directory - this is a path traversal attempt
+		if AppLogger != nil {
+			AppLogger.Logf("Warning: Path traversal attempt detected for %s (resolves outside home directory)", configFile)
+		}
+		// Return a safe path within home directory (just the basename)
+		return ctx.FS.Join(ctx.HomeDir, filepath.Base(configFile))
+	}
+
+	return resolved
 }
 
 // BackupFile backs up a single file

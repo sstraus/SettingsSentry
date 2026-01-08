@@ -3,7 +3,9 @@ package cronjob
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 
@@ -131,18 +133,33 @@ func IsCronJobInstalled() (bool, error) {
 }
 
 // InstallCronJob installs a cron job for the application
-func InstallCronJob(cronExpression string) error {
+func InstallCronJob(cronExpression string, allowCommands bool) error {
 	when := "@reboot"
 	if cronExpression != "" {
 		when = cronExpression
 	}
 
-	exePath, err := exec.LookPath("settingssentry")
+	// Security: Use os.Executable() instead of exec.LookPath to get the absolute path
+	// of the currently running binary. This prevents attacks where an attacker
+	// manipulates PATH to substitute a malicious binary.
+	exePath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("failed to find SettingsSentry executable: %w", err)
+		return fmt.Errorf("failed to get executable path: %w", err)
+	}
+
+	// Resolve symlinks to get the real path
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve executable path: %w", err)
 	}
 
 	command := fmt.Sprintf("%s backup", exePath)
+
+	// Add --allow-commands flag if requested
+	// Security: Commands are disabled by default. Only add the flag if explicitly requested.
+	if allowCommands {
+		command += " --allow-commands"
+	}
 
 	return AddCronJob(&when, command)
 }

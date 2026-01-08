@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"sync"
 )
 
 type OutputHandler func(line string)
@@ -45,7 +46,16 @@ func (e *OsCommandExecutor) ExecuteWithCallback(commandLine string, stdoutHandle
 		return false
 	}
 
+	// Use WaitGroup to ensure stdout/stderr reading goroutines complete
+	// before returning. This prevents:
+	// - Output truncation
+	// - Resource leaks
+	// - Race conditions between goroutine completion and cmd.Wait()
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stdoutPipe)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -56,6 +66,7 @@ func (e *OsCommandExecutor) ExecuteWithCallback(commandLine string, stdoutHandle
 	}()
 
 	go func() {
+		defer wg.Done()
 		scanner := bufio.NewScanner(stderrPipe)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -66,6 +77,10 @@ func (e *OsCommandExecutor) ExecuteWithCallback(commandLine string, stdoutHandle
 	}()
 
 	err = cmd.Wait()
+
+	// Wait for both goroutines to finish reading all output
+	wg.Wait()
+
 	return err == nil
 }
 

@@ -239,6 +239,35 @@ func copyDirectory(src, dst string) error {
 	return nil
 }
 
+// sanitizeConfigName sanitizes a configuration name to prevent path traversal attacks.
+// It removes any directory separators and path traversal sequences (../) that could
+// allow writing backups outside the intended backup directory.
+// Returns a sanitized name that is safe to use in path construction.
+func sanitizeConfigName(name string) string {
+	// Clean the path to resolve any .. or . components
+	cleaned := filepath.Clean(name)
+
+	// Remove any path separators - config names should be simple directory names
+	// Replace both Unix (/) and Windows (\) separators
+	cleaned = strings.ReplaceAll(cleaned, string(filepath.Separator), "_")
+	cleaned = strings.ReplaceAll(cleaned, "/", "_")
+	cleaned = strings.ReplaceAll(cleaned, "\\", "_")
+
+	// Additional security: if the cleaned name starts with "..", replace entirely
+	// This catches cases like "../../../../etc" which Clean() may not fully sanitize
+	if strings.HasPrefix(cleaned, "..") {
+		AppLogger.Logf("Warning: Config name '%s' contains path traversal sequences, using sanitized name 'unknown'", name)
+		return "unknown"
+	}
+
+	// If the name was modified, log a warning
+	if cleaned != name {
+		AppLogger.Logf("Warning: Config name '%s' was sanitized to '%s' to prevent path traversal", name, cleaned)
+	}
+
+	return cleaned
+}
+
 // ProcessConfiguration processes configuration files for backup or restore.
 // Accepts a slice of app names to process specific applications.
 func ProcessConfiguration(configFolder, backupFolder string, appNames []string, isBackup bool, commands bool, versionsToKeep int, zipBackup bool, password string) {
@@ -289,6 +318,9 @@ func ProcessConfiguration(configFolder, backupFolder string, appNames []string, 
 			AppLogger.Logf("Error parsing config file '%s': %v", file.Name(), err)
 			continue
 		}
+
+		// Sanitize config name to prevent path traversal attacks
+		cfg.Name = sanitizeConfigName(cfg.Name)
 
 		if Printer == nil {
 			AppLogger.Logf("Error: Printer is not initialized.")

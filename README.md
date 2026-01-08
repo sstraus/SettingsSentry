@@ -44,7 +44,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 
 ## Usage
 
-./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<app1,app2,...>`] [-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`] [-password=<pwd>] [-zip]
+./SettingsSentry `<action>` `<optional parameters>` [-config=`<path>`] [-backup=`<path>`] [-app=`<app1,app2,...>`] [-allow-commands] [-dry-run] [-versions=`<n>`] [-logfile=`<path>`] [-password=<pwd>] [-zip]
 
 ### Actions
 
@@ -52,6 +52,7 @@ Inspired by [Mackup](https://github.com/lra/mackup), SettingsSentry was created 
 - `restore`: Restore the files to their original locations.
 - `install`: Install the application as a CRON job that runs at every reboot.
     You can also provide a valid cron expression as a parameter to customize the schedule (0 9 \* \* \*). Use [cronhub](https://crontab.cronhub.io) to generate a valid one.
+    Use `--allow-commands` flag during install if you want the cron job to execute pre/post backup commands (disabled by default for security).
 - `remove`: Remove the previously installed CRON job.
 - `configsinit`: Extract embedded default configurations to a 'configs' directory located next to the executable. This allows for customization of the configurations and provides a way to view the default settings.
 
@@ -68,7 +69,7 @@ Backups: iCloud Drive/settingssentry_backups
 
 - `-app` `<app1,app2,...>`: Optional: Comma-separated list of application names to process.
 
-- `-commands`: Executes pre and post commands during backup or restore where available.
+- `-allow-commands`: **[SECURITY WARNING]** Allow execution of pre-backup/restore commands from config files. Disabled by default for security. Only enable for trusted configuration files! Commands execute with full user privileges and can run arbitrary code.
 
 - `-dry-run`: Perform a dry run without making any changes.
 
@@ -87,7 +88,7 @@ SettingsSentry supports the following environment variables:
 - `SETTINGSSENTRY_CONFIG`: Path to the configuration folder.
 - `SETTINGSSENTRY_BACKUP`: Path to the backup folder.
 - `SETTINGSSENTRY_APP`: Optional: Comma-separated list of application names to process.
-- `SETTINGSSENTRY_COMMANDS`: Set to 'true' to perform command execution during backup or restore.
+- `SETTINGSSENTRY_COMMANDS`: Set to 'true' to allow command execution during backup or restore. **SECURITY WARNING:** Only enable for trusted configs!
 - `SETTINGSSENTRY_DRY_RUN`: Set to 'true' to perform a dry run without making any changes.
 - `SETTINGSSENTRY_PASSWORD`: Password for encryption/decryption (alternative to `-password` flag).
 

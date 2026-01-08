@@ -3,6 +3,7 @@ package backup
 import (
 	"SettingsSentry/interfaces"
 	// "SettingsSentry/logger" // No longer needed directly
+	"SettingsSentry/pkg/command"
 	"SettingsSentry/pkg/config"
 	"SettingsSentry/pkg/printer"
 	"SettingsSentry/pkg/testutil" // Added testutil
@@ -420,4 +421,303 @@ func TestCopyDirectory_Errors(t *testing.T) {
 			t.Error("Expected error for nonexistent source directory")
 		}
 	})
+}
+
+// TestProcessConfiguration_CommandExecution tests that commands are only executed
+// when the commands flag is true (security feature)
+func TestProcessConfiguration_CommandExecution(t *testing.T) {
+	// Setup with a REAL command executor so commands can actually run
+	testFs := interfaces.NewOsFileSystem()
+	realCmdExecutor := interfaces.NewOsCommandExecutor()
+	testLogger := testutil.SetupTestGlobals(testFs, realCmdExecutor)
+
+	// Initialize package-specific dependencies
+	AppLogger = util.AppLogger
+	Fs = util.Fs
+	config.Fs = util.Fs
+	config.AppLogger = util.AppLogger
+	DryRun = util.DryRun
+
+	// Initialize command package globals for command execution
+	command.CmdExecutor = realCmdExecutor
+	command.AppLogger = util.AppLogger
+
+	testPrinter := printer.NewPrinter("Test", testLogger)
+	Printer = testPrinter
+	command.Printer = testPrinter
+
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, "configs")
+	backupDir := filepath.Join(tempDir, "backups")
+	mockHomeDir := filepath.Join(tempDir, "mockHome")
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		t.Fatalf("Failed to create backup dir: %v", err)
+	}
+	if err := os.MkdirAll(mockHomeDir, 0755); err != nil {
+		t.Fatalf("Failed to create mock home: %v", err)
+	}
+
+	// Mock GetHomeDirectory
+	originalGetHomeDir := config.GetHomeDirectory
+	config.GetHomeDirectory = func() (string, error) {
+		return mockHomeDir, nil
+	}
+	defer func() { config.GetHomeDirectory = originalGetHomeDir }()
+
+	// Create a marker file that will be deleted by the command
+	markerFile := filepath.Join(tempDir, "command_executed.txt")
+	if err := os.WriteFile(markerFile, []byte("marker"), 0644); err != nil {
+		t.Fatalf("Failed to create marker file: %v", err)
+	}
+
+	// Create a config file with a pre-backup command that creates a success marker
+	successMarker := filepath.Join(tempDir, "command_success.txt")
+	cfgContent := `[application]
+name = CommandTest
+
+[pre_backup_commands]
+echo "command_executed" > ` + successMarker + `
+
+[configuration_files]
+~/test.txt`
+
+	cfgPath := filepath.Join(configDir, "commandtest.cfg")
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+		t.Fatalf("Failed to write config file: %v", err)
+	}
+
+	// Create dummy source file
+	sourceFile := filepath.Join(mockHomeDir, "test.txt")
+	if err := os.WriteFile(sourceFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("Failed to create source file: %v", err)
+	}
+
+	t.Run("commands disabled by default", func(t *testing.T) {
+		// Remove success marker if it exists
+		os.Remove(successMarker)
+
+		// Run backup with commands=false (default, secure behavior)
+		ProcessConfiguration(configDir, backupDir, nil, true, false, 1, false, "")
+
+		// Success marker should NOT exist (command was NOT executed)
+		if _, err := os.Stat(successMarker); err == nil {
+			t.Error("SECURITY FAIL: Command executed when commands flag was false!")
+			t.Error("Commands should be disabled by default for security")
+		} else if os.IsNotExist(err) {
+			t.Log("PASS: Command not executed when flag is false (secure default)")
+		}
+	})
+
+	t.Run("commands enabled with flag", func(t *testing.T) {
+		// Remove success marker if it exists
+		os.Remove(successMarker)
+
+		// Run backup with commands=true
+		ProcessConfiguration(configDir, backupDir, nil, true, true, 1, false, "")
+
+		// Success marker SHOULD exist (command WAS executed)
+		if _, err := os.Stat(successMarker); err == nil {
+			t.Log("PASS: Command executed when flag is true")
+		} else if os.IsNotExist(err) {
+			t.Error("Command was not executed when commands flag was true")
+			t.Logf("Success marker does not exist at: %s", successMarker)
+		}
+	})
+}
+
+// TestBackupContext_CommandExecutionControl tests the BackupContext approach
+func TestBackupContext_CommandExecutionControl(t *testing.T) {
+	setupBackupTestDependencies()
+
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, "configs")
+	backupDir := filepath.Join(tempDir, "backups")
+	mockHomeDir := filepath.Join(tempDir, "mockHome")
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		t.Fatalf("Failed to create backup dir: %v", err)
+	}
+	if err := os.MkdirAll(mockHomeDir, 0755); err != nil {
+		t.Fatalf("Failed to create mock home: %v", err)
+	}
+
+	// Mock GetHomeDirectory
+	originalGetHomeDir := config.GetHomeDirectory
+	config.GetHomeDirectory = func() (string, error) {
+		return mockHomeDir, nil
+	}
+	defer func() { config.GetHomeDirectory = originalGetHomeDir }()
+
+	t.Run("context respects commands flag", func(t *testing.T) {
+		// Test with commands=false
+		ctx, err := NewBackupContext(configDir, backupDir, nil, true, false, 1, false, "")
+		if err != nil {
+			t.Fatalf("Failed to create context: %v", err)
+		}
+		if ctx.Commands {
+			t.Error("BackupContext.Commands should be false when flag is false")
+		}
+
+		// Test with commands=true
+		ctx2, err := NewBackupContext(configDir, backupDir, nil, true, true, 1, false, "")
+		if err != nil {
+			t.Fatalf("Failed to create context: %v", err)
+		}
+		if !ctx2.Commands {
+			t.Error("BackupContext.Commands should be true when flag is true")
+		}
+	})
+}
+
+// TestBackupConfigNamePathTraversal tests that malicious config names with path traversal
+// sequences cannot write backups outside the intended backup directory
+func TestBackupConfigNamePathTraversal(t *testing.T) {
+	setupBackupTestDependencies()
+
+	// Create temp directories
+	tempDir, err := os.MkdirTemp("", "settingssentry-pathtraversal-")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
+
+	configDir := filepath.Join(tempDir, "configs")
+	backupDir := filepath.Join(tempDir, "backups")
+	homeDir := filepath.Join(tempDir, "home")
+	testFile := filepath.Join(homeDir, "test.conf")
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("Failed to create config dir: %v", err)
+	}
+	if err := os.MkdirAll(homeDir, 0755); err != nil {
+		t.Fatalf("Failed to create home dir: %v", err)
+	}
+
+	// Create a test file to backup
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		configName  string
+		description string
+	}{
+		{
+			name:        "path traversal with parent directories",
+			configName:  "../../../malicious",
+			description: "Attacker tries to write backup outside backup folder using ../../../",
+		},
+		{
+			name:        "path traversal with absolute-like path",
+			configName:  "../../etc/shadow",
+			description: "Attacker tries to overwrite system files",
+		},
+		{
+			name:        "legitimate config name",
+			configName:  "myapp",
+			description: "Normal config name should work",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create malicious config file
+			configContent := `[Application]
+name=` + tt.configName + `
+
+[Files]
+~/test.conf
+`
+			configPath := filepath.Join(configDir, "malicious.cfg")
+			if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+				t.Fatalf("Failed to write config file: %v", err)
+			}
+			defer os.Remove(configPath)
+
+			// Mock GetHomeDirectory
+			originalGetHomeDir := config.GetHomeDirectory
+			config.GetHomeDirectory = func() (string, error) {
+				return homeDir, nil
+			}
+			defer func() { config.GetHomeDirectory = originalGetHomeDir }()
+
+			// Create backup context
+			ctx, err := NewBackupContext(configDir, backupDir, nil, true, false, 0, false, "")
+			if err != nil {
+				t.Fatalf("Failed to create backup context: %v", err)
+			}
+
+			// Setup backup directory
+			if err := ctx.SetupBackupDirectory(); err != nil {
+				t.Fatalf("Failed to setup backup directory: %v", err)
+			}
+
+			// Load config files
+			currentFS, files, err := ctx.LoadConfigFiles()
+			if err != nil {
+				t.Fatalf("Failed to load config files: %v", err)
+			}
+
+			// Process the config file
+			for _, file := range files {
+				if !strings.HasSuffix(file.Name(), ".cfg") {
+					continue
+				}
+
+				cfg, err := config.ParseConfig(currentFS, file.Name())
+				if err != nil {
+					t.Logf("Failed to parse config: %v", err)
+					continue
+				}
+
+				// Sanitize config name to prevent path traversal attacks
+				// This simulates what ProcessConfiguration does in production code
+				sanitizedName := sanitizeConfigName(cfg.Name)
+				t.Logf("Original cfg.Name: %s, Sanitized: %s", cfg.Name, sanitizedName)
+
+				// Process each file in the config
+				for _, configFile := range cfg.Files {
+					configFile = ctx.ResolveConfigFilePath(configFile)
+
+					var targetPath string
+					if ctx.ZipBackup {
+						targetPath = Fs.Join(ctx.StagingDir, sanitizedName, Fs.Base(configFile))
+					} else {
+						targetPath = Fs.Join(ctx.BackupFolder, ctx.Timestamp, sanitizedName, Fs.Base(configFile))
+					}
+
+					// Security check: ensure targetPath is within backupDir
+					absBackupDir, err := filepath.Abs(backupDir)
+					if err != nil {
+						t.Fatalf("Failed to get absolute backup dir: %v", err)
+					}
+
+					absTargetPath, err := filepath.Abs(targetPath)
+					if err != nil {
+						t.Fatalf("Failed to get absolute target path: %v", err)
+					}
+
+					relPath, err := filepath.Rel(absBackupDir, absTargetPath)
+					if err != nil || strings.HasPrefix(relPath, "..") {
+						t.Errorf("%s: Backup path escapes backup directory!\n  Config name: %s\n  Target path: %s\n  Backup dir: %s\n  Relative: %s",
+							tt.description, cfg.Name, absTargetPath, absBackupDir, relPath)
+					} else {
+						t.Logf("✓ Backup path safely within backup directory: %s", relPath)
+					}
+				}
+			}
+		})
+	}
 }
