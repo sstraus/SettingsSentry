@@ -1,0 +1,49 @@
+pkg/backup/backup_operations_test.go
+  a945502592638571 1641-1741
+pkg/backup/backup_test.go
+  a945502592638571 6,425-723
+main_cli.go
+  a945502592638571 92,185-191,195-200
+cron/cronjob_test.go
+  a945502592638571 126,143,157,311-368
+interfaces/command.go
+  a945502592638571 8,49-56,58,69,80-83
+README.md
+  a945502592638571 47,55,72,91
+interfaces/command_test.go
+  a945502592638571 5,7,156-317
+pkg/backup/backup_operations.go
+  a945502592638571 168-169,171-173,175,177,179-182,184-195,197-219
+.gitignore
+  a945502592638571 3
+main.go
+  a945502592638571 22
+CHANGELOG.md
+  a945502592638571 5-72
+pkg/backup/zip_test.go
+  a945502592638571 496-698
+pkg/backup/backup.go
+  a945502592638571 242-270,322-324
+cron/cronjob.go
+  a945502592638571 6,8,136,142-145,147-153,158-162
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.0.29",
+  "base_commit_sha": "363c589ba88a76f72a6a0367113c4d6cd7fd8cca",
+  "prompts": {
+    "a945502592638571": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2a1a551a-91e0-4a56-bc18-d193d17793fc",
+        "model": "claude-sonnet-4-5-20250929"
+      },
+      "human_author": "Stefano Straus <stefano@straus.it>",
+      "messages": [],
+      "total_additions": 1103,
+      "total_deletions": 88,
+      "accepted_lines": 1032,
+      "overriden_lines": 0
+    }
+  }
+}
