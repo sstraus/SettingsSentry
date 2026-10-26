@@ -15,11 +15,11 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w -X main.Version={{.Version}}
     binary: settingssentry
 
 archives:
-  - format: zip
+  - formats: [zip]
     name_template: |-
       {{ .ProjectName }}_
       {{- if eq .Arch "amd64" }}x86_64

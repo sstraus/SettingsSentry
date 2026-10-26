@@ -14,40 +14,38 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
           check-latest: true
 
       - name: Run tests
-        run: go test -v ./...
+        run: go test -p 1 -v ./...
 
-      - name: Build macOS binary
-        run: |
-          go build -o SettingsSentry
-          chmod +x SettingsSentry
-          
-      - name: Create DMG
-        run: |
-          mkdir -p ./SettingsSentry.app/Contents/MacOS
-          cp SettingsSentry ./SettingsSentry.app/Contents/MacOS/
-          hdiutil create -volname "SettingsSentry" -srcfolder ./SettingsSentry.app -ov -format UDZO SettingsSentry.dmg
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: v2.19.0
+          install-only: true
 
-      - name: Create ZIP with configs
-        run: |
-          zip -r SettingsSentry.zip SettingsSentry configs
+      - name: Build release archives
+        run: make release GORELEASER_ARGS="release --clean --skip=publish"
+
+      - name: Check release archives
+        run: python3 scripts/check-release.py
 
       - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          distribution: goreleaser
-          version: latest
-          args: release
+          files: |
+            dist/SettingsSentry_*.zip
+            dist/checksums.txt
+          fail_on_unmatched_files: true
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

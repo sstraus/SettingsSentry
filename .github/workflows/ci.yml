@@ -12,20 +12,16 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
           check-latest: true
-      # Removed blank line here
+
       - name: Install golangci-lint
-        run: |
-          # Install the latest golangci-lint using the official script
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
-          # The script automatically installs the latest version if no version tag is provided
-          golangci-lint --version
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
       - name: Run golangci-lint
         run: golangci-lint run ./...
@@ -35,15 +31,16 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
           check-latest: true
 
       - name: Install cron (for local act simulation)
+        if: runner.os == 'Linux'
         # This is needed because the Ubuntu container used for simulation doesn't have cron/crontab by default.
         # The actual macos-latest runner on GitHub has it.
         run: |
@@ -54,10 +51,10 @@ jobs:
           exit 0
 
       - name: Run unit tests
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        run: go test -p 1 -v -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: ./coverage.txt # Changed 'file' to 'files'
           fail_ci_if_error: false
@@ -68,16 +65,16 @@ jobs:
     needs: test
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
           check-latest: true
 
       - name: Run integration tests
-        run: go test -v -tags=integration ./... # Removed incorrect -args flag
+        run: go test -p 1 -v -tags=integration ./... # Removed incorrect -args flag
 
   build:
     name: Build
@@ -85,14 +82,14 @@ jobs:
     needs: [lint, test]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version-file: go.mod
           check-latest: true
 
       - name: Build
@@ -102,9 +99,10 @@ jobs:
         run: make zip
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: settingssentry
+          if-no-files-found: error
           path: |
-            SettingsSentry
-            SettingsSentry.zip
+            settingssentry
+            settingssentry.zip

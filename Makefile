@@ -3,6 +3,7 @@
 BINARY_NAME=settingssentry
 VERSION=$(shell git describe --tags --always --dirty)
 LDFLAGS=-ldflags "-X main.Version=${VERSION}"
+GORELEASER_ARGS?=release --snapshot --clean
 
 help:
 	@echo "Available commands:"
@@ -20,23 +21,22 @@ help:
 	@echo "  make help             - Show this help message"
 
 build:
-	@echo "Temporarily renaming TestCommand.cfg..."
-	@mv configs/TestCommand.cfg configs/TestCommand.not_embed || true
-	@echo "Building..."
-	@go build ${LDFLAGS} -o ${BINARY_NAME} . ; \
-	EXIT_CODE=$$? ; \
-	echo "Renaming TestCommand.cfg back..." ; \
-	mv configs/TestCommand.not_embed configs/TestCommand.cfg || true ; \
-	exit $$EXIT_CODE
+	@set -e; \
+	if [ -f configs/TestCommand.cfg ]; then \
+		test ! -e configs/TestCommand.not_embed; \
+		mv configs/TestCommand.cfg configs/TestCommand.not_embed; \
+		trap 'mv configs/TestCommand.not_embed configs/TestCommand.cfg' EXIT; \
+	fi; \
+	go build ${LDFLAGS} -o ${BINARY_NAME} .
 
 test:
-	go test -v -race ./...
+	go test -p 1 -v -race ./...
 
 integration-test:
-	go test -v -tags=integration ./...
+	go test -p 1 -v -tags=integration ./...
 
 coverage:
-	go test -coverprofile=coverage.out ./...
+	go test -p 1 -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out
 
 lint:
@@ -55,14 +55,13 @@ clean:
 	rm -f coverage.out
 
 release:
-	@echo "Temporarily renaming TestCommand.cfg..."
-	@mv configs/TestCommand.cfg configs/TestCommand.not_embed || true
-	@echo "Building..."
-	@goreleaser release --snapshot --clean ; \
-	EXIT_CODE=$$? ; \
-	echo "Renaming TestCommand.cfg back..." ; \
-	mv configs/TestCommand.not_embed configs/TestCommand.cfg || true ; \
-	exit $$EXIT_CODE
+	@set -e; \
+	if [ -f configs/TestCommand.cfg ]; then \
+		test ! -e configs/TestCommand.not_embed; \
+		mv configs/TestCommand.cfg configs/TestCommand.not_embed; \
+		trap 'mv configs/TestCommand.not_embed configs/TestCommand.cfg' EXIT; \
+	fi; \
+	goreleaser ${GORELEASER_ARGS}
 
 dmg:
 	mkdir -p ./${BINARY_NAME}.app/Contents/MacOS
@@ -70,7 +69,8 @@ dmg:
 	hdiutil create -volname "${BINARY_NAME}" -srcfolder ./${BINARY_NAME}.app -ov -format UDZO ${BINARY_NAME}.dmg
 
 zip: build
-	zip -r ${BINARY_NAME}.zip ${BINARY_NAME} configs
+	rm -f ${BINARY_NAME}.zip
+	zip ${BINARY_NAME}.zip ${BINARY_NAME} configs/*.cfg -x configs/TestCommand.cfg
 
 install: build
 	cp ${BINARY_NAME} /usr/local/bin/
