@@ -363,11 +363,11 @@ func TestParseConfig_Sections(t *testing.T) {
 	tempDir := t.TempDir()
 
 	tests := []struct {
-		name           string
-		configContent  string
-		expectedName   string
-		expectedFiles  int
-		expectedPreBkp int
+		name            string
+		configContent   string
+		expectedName    string
+		expectedFiles   int
+		expectedPreBkp  int
 		expectedPostBkp int
 		expectedPreRst  int
 		expectedPostRst int
@@ -751,8 +751,8 @@ name = TestApp
 			expectError: true, // Parser should catch malformed INI
 		},
 		{
-			name: "empty file",
-			content: ``,
+			name:        "empty file",
+			content:     ``,
 			expectError: true, // No name or files
 		},
 		{
@@ -774,7 +774,7 @@ name = TestApp
 
 			testFS := os.DirFS(tempDir)
 			config, err := ParseConfig(testFS, "test.cfg")
-			
+
 			if tt.expectError {
 				// Validation might catch the error
 				if err == nil {
@@ -828,12 +828,12 @@ name = TestApp
 
 			testFS := os.DirFS(tempDir)
 			config, err := ParseConfig(testFS, "test.cfg")
-			
+
 			// Parse should succeed but validation should fail
 			if err != nil {
 				t.Logf("Parse returned error: %v", err)
 			}
-			
+
 			validateErr := ValidateConfig(config)
 			if validateErr == nil {
 				t.Error("Expected validation error for incomplete config")
@@ -890,10 +890,10 @@ func TestParseConfig_LargeFile(t *testing.T) {
 	// Create a large config file
 	var content strings.Builder
 	content.WriteString("[application]\nname = LargeApp\n\n[configuration_files]\n")
-	
+
 	// Add many file entries
 	for i := 0; i < 1000; i++ {
-		content.WriteString(fmt.Sprintf(".config/file%d\n", i))
+		fmt.Fprintf(&content, ".config/file%d\n", i)
 	}
 
 	configPath := filepath.Join(tempDir, "large.cfg")

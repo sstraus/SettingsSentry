@@ -436,6 +436,7 @@ func TestExecuteBackupRestore_FlagsValidation(t *testing.T) {
 
 // TestExecuteInstall tests cron job installation
 func TestExecuteInstall(t *testing.T) {
+	testutil.PreserveCrontab(t)
 	cli, logger := setupCLITest()
 	defer logger.Close()
 
@@ -476,6 +477,7 @@ func TestExecuteInstall(t *testing.T) {
 
 // TestExecuteRemove tests cron job removal
 func TestExecuteRemove(t *testing.T) {
+	testutil.PreserveCrontab(t)
 	cli, logger := setupCLITest()
 	defer logger.Close()
 

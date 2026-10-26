@@ -1,6 +1,7 @@
 package cronjob
 
 import (
+	"SettingsSentry/pkg/testutil"
 	"bytes"
 	"os/exec"
 	"strings"
@@ -12,24 +13,9 @@ func containsCronJob(crontab string) bool {
 }
 
 func withCrontabBackup(t *testing.T, testFunc func()) {
-	cmd := exec.Command("crontab", "-l")
-	var backupBuffer bytes.Buffer
-	cmd.Stdout = &backupBuffer
-	err := cmd.Run()
-
-	// If there's no crontab, that's fine
-	var originalCrontab string
-	if err == nil {
-		originalCrontab = backupBuffer.String()
-	}
-
+	t.Helper()
+	testutil.PreserveCrontab(t)
 	testFunc()
-
-	cmd = exec.Command("crontab", "-")
-	cmd.Stdin = strings.NewReader(originalCrontab)
-	if err := cmd.Run(); err != nil {
-		t.Logf("Warning: Failed to restore original crontab: %v", err)
-	}
 }
 
 func TestAddCronJob(t *testing.T) {
@@ -249,6 +235,7 @@ func TestAddCronJob_ValidCronExpression(t *testing.T) {
 }
 
 func TestRemoveCronJob_NoCrontab(t *testing.T) {
+	testutil.PreserveCrontab(t)
 	// First, remove all cron jobs to ensure clean state
 	_ = exec.Command("crontab", "-r").Run()
 
@@ -287,6 +274,7 @@ func TestRemoveCronJob_NoMatchingJob(t *testing.T) {
 }
 
 func TestIsCronJobInstalled_NoCrontab(t *testing.T) {
+	testutil.PreserveCrontab(t)
 	// Remove all cron jobs
 	_ = exec.Command("crontab", "-r").Run()
 

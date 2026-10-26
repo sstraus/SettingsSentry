@@ -8,6 +8,7 @@ import (
 	"SettingsSentry/pkg/printer"
 	"SettingsSentry/pkg/testutil" // Added testutil
 	"SettingsSentry/pkg/util"     // Keep util for Fs/AppLogger/DryRun access
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -498,7 +499,9 @@ echo "command_executed" > ` + successMarker + `
 
 	t.Run("commands disabled by default", func(t *testing.T) {
 		// Remove success marker if it exists
-		os.Remove(successMarker)
+		if err := os.Remove(successMarker); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("Failed to remove success marker: %v", err)
+		}
 
 		// Run backup with commands=false (default, secure behavior)
 		ProcessConfiguration(configDir, backupDir, nil, true, false, 1, false, "")
@@ -514,7 +517,9 @@ echo "command_executed" > ` + successMarker + `
 
 	t.Run("commands enabled with flag", func(t *testing.T) {
 		// Remove success marker if it exists
-		os.Remove(successMarker)
+		if err := os.Remove(successMarker); err != nil && !os.IsNotExist(err) {
+			t.Fatalf("Failed to remove success marker: %v", err)
+		}
 
 		// Run backup with commands=true
 		ProcessConfiguration(configDir, backupDir, nil, true, true, 1, false, "")
@@ -644,7 +649,11 @@ name=` + tt.configName + `
 			if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 				t.Fatalf("Failed to write config file: %v", err)
 			}
-			defer os.Remove(configPath)
+			t.Cleanup(func() {
+				if err := os.Remove(configPath); err != nil {
+					t.Errorf("Failed to remove config: %v", err)
+				}
+			})
 
 			// Mock GetHomeDirectory
 			originalGetHomeDir := config.GetHomeDirectory
@@ -722,65 +731,59 @@ name=` + tt.configName + `
 	}
 }
 
-// TestProcessConfiguration_PartialBackupFailure tests error aggregation
-func TestProcessConfiguration_PartialBackupFailure(t *testing.T) {
-	tempDir, backupDir := setup
+// TestProcessConfiguration_MissingOptionalFile catches aborting a backup on an absent optional file.
+func TestProcessConfiguration_MissingOptionalFile(t *testing.T) {
+	setupBackupTestDependencies()
+	var output bytes.Buffer
+	AppLogger.SetCliLoggerOutput(&output)
+	t.Cleanup(AppLogger.Close)
 
-BackupTestDirs(t)
-	defer os.RemoveAll(tempDir)
-	defer os.RemoveAll(backupDir)
+	homeDir := t.TempDir()
+	backupDir := t.TempDir()
+	configDir := t.TempDir()
+	originalHomeDir := config.GetHomeDirectory
+	config.GetHomeDirectory = func() (string, error) { return homeDir, nil }
+	t.Cleanup(func() { config.GetHomeDirectory = originalHomeDir })
 
-	// Create config with multiple files, some will fail
-	configDir := filepath.Join(tempDir, "configs")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a config that references both existing and non-accessible files
 	configContent := `[application]
-name = TestPartialFailure
+name = TestOptionalFile
 
 [configuration_files]
 good_file.txt
-/root/inaccessible.txt
+missing_optional.txt
 another_good.txt
 `
-	configPath := filepath.Join(configDir, "partial.cfg")
-	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(configDir, "optional.cfg"), []byte(configContent), 0644); err != nil {
 		t.Fatal(err)
 	}
-
-	// Create the good files
-	goodFile1 := filepath.Join(tempDir, "good_file.txt")
-	goodFile2 := filepath.Join(tempDir, "another_good.txt")
-	os.WriteFile(goodFile1, []byte("content1"), 0644)
-	os.WriteFile(goodFile2, []byte("content2"), 0644)
-
-	// Run backup - should aggregate errors
-	err := ProcessConfiguration(configDir, backupDir, []string{}, true, false, 1, false, "")
-	
-	// Should return error indicating partial failure
-	if err == nil {
-		t.Error("ProcessConfiguration should return error for partial backup failure")
-	}
-	
-	// Error message should mention failed files
-	errMsg := err.Error()
-	if !strings.Contains(errMsg, "failed") && !strings.Contains(errMsg, "error") {
-		t.Errorf("Error message should indicate failures, got: %s", errMsg)
+	goodFiles := map[string]string{"good_file.txt": "content1", "another_good.txt": "content2"}
+	for name, content := range goodFiles {
+		if err := os.WriteFile(filepath.Join(homeDir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	// Good files should still be backed up
+	ProcessConfiguration(configDir, backupDir, nil, true, false, 1, false, "")
+
 	timestamp := getLatestTimestamp(t, backupDir)
-	goodBackup1 := filepath.Join(backupDir, timestamp, "TestPartialFailure", "good_file.txt")
-	goodBackup2 := filepath.Join(backupDir, timestamp, "TestPartialFailure", "another_good.txt")
-	
-	if _, err := os.Stat(goodBackup1); os.IsNotExist(err) {
-		t.Error("Good file 1 should be backed up despite other failures")
+	for name, expected := range goodFiles {
+		content, err := os.ReadFile(filepath.Join(backupDir, timestamp, "TestOptionalFile", name))
+		if err != nil {
+			t.Errorf("Existing file %s was not backed up: %v", name, err)
+		} else if string(content) != expected {
+			t.Errorf("Backup %s = %q, want %q", name, content, expected)
+		}
+		if !strings.Contains(output.String(), "Backed up "+filepath.Join(homeDir, name)+" to ") {
+			t.Errorf("Missing success log for %s in: %s", name, output.String())
+		}
 	}
-	if _, err := os.Stat(goodBackup2); os.IsNotExist(err) {
-		t.Error("Good file 2 should be backed up despite other failures")
+	if _, err := os.Stat(filepath.Join(backupDir, timestamp, "TestOptionalFile", "missing_optional.txt")); !os.IsNotExist(err) {
+		t.Errorf("Missing optional file must not create a backup artifact: %v", err)
 	}
+	if strings.Contains(strings.ToLower(output.String()), "error") || strings.Contains(strings.ToLower(output.String()), "failed") {
+		t.Errorf("Missing optional file should not cause an error log: %s", output.String())
+	}
+
 }
 
 func getLatestTimestamp(t *testing.T, backupDir string) string {

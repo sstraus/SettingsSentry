@@ -7,6 +7,7 @@ import (
 	// Needed for setupBackupTestDependencies
 	// Needed for setupBackupTestDependencies
 	"archive/zip"
+	"errors"
 	"fmt" // Needed for TestProcessConfiguration_* tests
 	"io"
 	"os"
@@ -511,7 +512,11 @@ func TestExtractFromZip_SymlinkAttack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test zip file: %v", err)
 	}
-	defer zipFile.Close()
+	t.Cleanup(func() {
+		if err := zipFile.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Errorf("Failed to close zip file: %v", err)
+		}
+	})
 
 	zipWriter := zip.NewWriter(zipFile)
 
@@ -633,14 +638,20 @@ func TestExtractFromZip_PathTraversal(t *testing.T) {
 	if _, err := zipFile.ReadAt(zipBytes, 0); err != nil && err != io.EOF {
 		t.Fatalf("Failed to read zip: %v", err)
 	}
-	zipFile.Close()
+	if err := zipFile.Close(); err != nil {
+		t.Fatalf("Failed to close zip file: %v", err)
+	}
 
 	// Create new zip with malicious entry
 	zipFile, err = os.Create(zipPath)
 	if err != nil {
 		t.Fatalf("Failed to recreate zip: %v", err)
 	}
-	defer zipFile.Close()
+	t.Cleanup(func() {
+		if err := zipFile.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Errorf("Failed to close zip file: %v", err)
+		}
+	})
 
 	zipWriter := zip.NewWriter(zipFile)
 
