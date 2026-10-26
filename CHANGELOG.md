@@ -4,6 +4,19 @@ All notable changes to SettingsSentry will be documented in this file.
 
 ## [Unreleased]
 
+## SettingsSentry v1.2.1 - 2026-10-26
+
+### Bug Fixes
+- Select the Go version from `go.mod` in all workflows.
+- Build CodeQL sources with the explicit Makefile build target.
+- Pin golangci-lint installation and correct CI artifact filenames.
+- Build release ZIP archives for Intel and Apple Silicon with GoReleaser.
+- Set the correct application version in release binaries and exclude the command test fixture.
+
+### Development
+- Update GitHub Actions after checking their input contracts.
+- Include the merged `golang.org/x/crypto` updates through v0.58.0.
+
 ## SettingsSentry v1.2.0 - 2026-01-08
 
 ### BREAKING CHANGES
